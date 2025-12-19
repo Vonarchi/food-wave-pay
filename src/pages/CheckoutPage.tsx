@@ -22,23 +22,29 @@ const CheckoutPage = () => {
   const handlePayment = async () => {
     setIsProcessing(true);
 
-    // Simulate payment processing
-    await new Promise((resolve) => setTimeout(resolve, 2000));
+    try {
+      // Simulate payment processing
+      await new Promise((resolve) => setTimeout(resolve, 2000));
 
-    // Create order
-    const order = addOrder({
-      truckId,
-      items: [...items],
-      subtotal: getSubtotal(),
-      tax: getTax(),
-      total: getTotal(),
-      status: 'received',
-      customerName: customerName || undefined,
-    });
+      // Create order in database
+      const order = await addOrder({
+        truckId,
+        items: [...items],
+        subtotal: getSubtotal(),
+        tax: getTax(),
+        total: getTotal(),
+        status: 'received',
+        customerName: customerName || undefined,
+      });
 
-    clearCart();
-    toast.success('Order placed successfully!');
-    navigate(`/confirmation/${order.id}`);
+      clearCart();
+      toast.success('Order placed successfully!');
+      navigate(`/confirmation/${order.id}`);
+    } catch (error) {
+      console.error('Error placing order:', error);
+      toast.error('Failed to place order. Please try again.');
+      setIsProcessing(false);
+    }
   };
 
   return (

@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { CartItem, MenuItem, SelectedModifier, Order, OrderStatus } from '@/types';
+import { supabase } from '@/integrations/supabase/client';
 
 interface CartState {
   items: CartItem[];
@@ -16,11 +17,13 @@ interface CartState {
 interface OrderState {
   orders: Order[];
   currentOrder: Order | null;
-  orderCounter: number;
-  addOrder: (order: Omit<Order, 'id' | 'orderNumber' | 'createdAt'>) => Order;
-  updateOrderStatus: (orderId: string, status: OrderStatus) => void;
+  isLoading: boolean;
+  fetchOrders: () => Promise<void>;
+  addOrder: (order: Omit<Order, 'id' | 'orderNumber' | 'createdAt'>) => Promise<Order>;
+  updateOrderStatus: (orderId: string, status: OrderStatus) => Promise<void>;
   setCurrentOrder: (order: Order | null) => void;
   getActiveOrders: () => Order[];
+  setOrders: (orders: Order[]) => void;
 }
 
 const TAX_RATE = 0.0825; // 8.25% tax
@@ -80,28 +83,92 @@ export const useCartStore = create<CartState>((set, get) => ({
   getItemCount: () => get().items.reduce((count, item) => count + item.quantity, 0),
 }));
 
+// Helper to generate order number
+const generateOrderNumber = (): string => {
+  return Math.floor(100 + Math.random() * 900).toString();
+};
+
+// Helper to map database row to Order type
+const mapDbRowToOrder = (row: any): Order => ({
+  id: row.id,
+  orderNumber: parseInt(row.order_number, 10),
+  truckId: row.truck_id,
+  customerName: row.customer_name || undefined,
+  items: row.items as CartItem[],
+  subtotal: parseFloat(row.subtotal),
+  tax: parseFloat(row.tax),
+  total: parseFloat(row.total),
+  status: row.status as OrderStatus,
+  createdAt: new Date(row.created_at),
+});
+
 export const useOrderStore = create<OrderState>((set, get) => ({
   orders: [],
   currentOrder: null,
-  orderCounter: 100, // Start order numbers at 100
+  isLoading: false,
 
-  addOrder: (orderData) => {
-    const orderNumber = get().orderCounter;
-    const newOrder: Order = {
-      ...orderData,
-      id: `order-${Date.now()}`,
-      orderNumber,
-      createdAt: new Date(),
-    };
+  fetchOrders: async () => {
+    set({ isLoading: true });
+    const { data, error } = await supabase
+      .from('orders')
+      .select('*')
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      console.error('Error fetching orders:', error);
+      set({ isLoading: false });
+      return;
+    }
+
+    const orders = (data || []).map(mapDbRowToOrder);
+    set({ orders, isLoading: false });
+  },
+
+  setOrders: (orders) => set({ orders }),
+
+  addOrder: async (orderData) => {
+    const orderNumber = generateOrderNumber();
+    
+    const { data, error } = await supabase
+      .from('orders')
+      .insert({
+        order_number: orderNumber,
+        truck_id: orderData.truckId,
+        customer_name: orderData.customerName || null,
+        items: orderData.items as any,
+        subtotal: orderData.subtotal,
+        tax: orderData.tax,
+        total: orderData.total,
+        status: orderData.status,
+      })
+      .select()
+      .single();
+
+    if (error) {
+      console.error('Error creating order:', error);
+      throw error;
+    }
+
+    const newOrder = mapDbRowToOrder(data);
     set((state) => ({
       orders: [newOrder, ...state.orders],
-      orderCounter: state.orderCounter + 1,
       currentOrder: newOrder,
     }));
+    
     return newOrder;
   },
 
-  updateOrderStatus: (orderId, status) => {
+  updateOrderStatus: async (orderId, status) => {
+    const { error } = await supabase
+      .from('orders')
+      .update({ status })
+      .eq('id', orderId);
+
+    if (error) {
+      console.error('Error updating order status:', error);
+      throw error;
+    }
+
     set((state) => ({
       orders: state.orders.map((order) =>
         order.id === orderId ? { ...order, status } : order

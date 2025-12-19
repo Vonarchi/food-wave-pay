@@ -1,15 +1,65 @@
 import { useEffect, useRef } from 'react';
 import { useOrderStore } from '@/store/useStore';
-import { Order, OrderStatus, ORDER_STATUS_LABELS, ORDER_STATUS_COLORS } from '@/types';
+import { Order, OrderStatus, ORDER_STATUS_LABELS, ORDER_STATUS_COLORS, CartItem } from '@/types';
 import { Button } from '@/components/ui/button';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Bell, ChefHat, Clock, CheckCircle } from 'lucide-react';
 import { toast } from 'sonner';
+import { supabase } from '@/integrations/supabase/client';
 
 const KitchenDisplayPage = () => {
-  const { orders, updateOrderStatus, getActiveOrders } = useOrderStore();
+  const { orders, updateOrderStatus, getActiveOrders, fetchOrders, setOrders } = useOrderStore();
   const activeOrders = getActiveOrders();
   const prevOrderCountRef = useRef(activeOrders.length);
+
+  // Fetch orders on mount and subscribe to real-time updates
+  useEffect(() => {
+    fetchOrders();
+
+    const channel = supabase
+      .channel('orders-realtime')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'orders',
+        },
+        (payload) => {
+          console.log('Realtime update:', payload);
+          
+          if (payload.eventType === 'INSERT') {
+            const newOrder: Order = {
+              id: payload.new.id,
+              orderNumber: parseInt(payload.new.order_number, 10),
+              truckId: payload.new.truck_id,
+              customerName: payload.new.customer_name || undefined,
+              items: payload.new.items as CartItem[],
+              subtotal: parseFloat(payload.new.subtotal),
+              tax: parseFloat(payload.new.tax),
+              total: parseFloat(payload.new.total),
+              status: payload.new.status as OrderStatus,
+              createdAt: new Date(payload.new.created_at),
+            };
+            
+            setOrders([newOrder, ...orders]);
+          } else if (payload.eventType === 'UPDATE') {
+            setOrders(
+              orders.map((order) =>
+                order.id === payload.new.id
+                  ? { ...order, status: payload.new.status as OrderStatus }
+                  : order
+              )
+            );
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, []);
 
   // Play sound and show notification for new orders
   useEffect(() => {
@@ -18,7 +68,7 @@ const KitchenDisplayPage = () => {
       toast.success('New order received!', {
         icon: <Bell className="w-5 h-5 text-primary" />,
       });
-      // Play notification sound (would need actual audio file)
+      // Play notification sound
       try {
         const audio = new Audio('/notification.mp3');
         audio.play().catch(() => {});
@@ -51,11 +101,15 @@ const KitchenDisplayPage = () => {
     }
   };
 
-  const handleStatusUpdate = (order: Order) => {
+  const handleStatusUpdate = async (order: Order) => {
     const nextStatus = getNextStatus(order.status);
     if (nextStatus) {
-      updateOrderStatus(order.id, nextStatus);
-      toast.success(`Order #${order.orderNumber} marked as ${ORDER_STATUS_LABELS[nextStatus]}`);
+      try {
+        await updateOrderStatus(order.id, nextStatus);
+        toast.success(`Order #${order.orderNumber} marked as ${ORDER_STATUS_LABELS[nextStatus]}`);
+      } catch (error) {
+        toast.error('Failed to update order status');
+      }
     }
   };
 

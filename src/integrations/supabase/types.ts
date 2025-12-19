@@ -14,6 +14,48 @@ export type Database = {
   }
   public: {
     Tables: {
+      menu_items: {
+        Row: {
+          category: string
+          created_at: string
+          description: string | null
+          id: string
+          image_url: string | null
+          is_available: boolean
+          modifiers: Json | null
+          name: string
+          price: number
+          truck_id: string
+          updated_at: string
+        }
+        Insert: {
+          category?: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          image_url?: string | null
+          is_available?: boolean
+          modifiers?: Json | null
+          name: string
+          price: number
+          truck_id: string
+          updated_at?: string
+        }
+        Update: {
+          category?: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          image_url?: string | null
+          is_available?: boolean
+          modifiers?: Json | null
+          name?: string
+          price?: number
+          truck_id?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       orders: {
         Row: {
           created_at: string

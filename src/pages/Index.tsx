@@ -1,7 +1,7 @@
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { motion } from 'framer-motion';
-import { QrCode, Smartphone, ChefHat, Zap, CreditCard, Clock } from 'lucide-react';
+import { QrCode, Smartphone, ChefHat, Zap, CreditCard, Clock, Settings } from 'lucide-react';
 
 const Index = () => {
   const navigate = useNavigate();
@@ -48,6 +48,15 @@ const Index = () => {
               >
                 <ChefHat className="w-5 h-5 mr-2" />
                 View Kitchen Display
+              </Button>
+              <Button
+                variant="outline"
+                size="xl"
+                className="border-2 border-primary-foreground/30 text-primary-foreground hover:bg-primary-foreground/10"
+                onClick={() => navigate('/admin')}
+              >
+                <Settings className="w-5 h-5 mr-2" />
+                Menu Admin
               </Button>
             </div>
           </motion.div>

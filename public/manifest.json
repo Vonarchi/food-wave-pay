@@ -1,7 +1,7 @@
 {
-  "name": "TruckBite - Food Truck Ordering",
-  "short_name": "TruckBite",
-  "description": "Order food from your favorite food trucks instantly",
+  "name": "Smackin Jacks - Food Truck Ordering",
+  "short_name": "Smackin Jacks",
+  "description": "Order food from Smackin Jacks instantly",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#FDF8F4",

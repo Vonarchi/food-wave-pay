@@ -25,10 +25,10 @@ const Index = () => {
             </div>
             
             <h1 className="text-4xl md:text-6xl font-bold text-primary-foreground mb-6 leading-tight">
-              TruckBite
+              Smackin Jacks
             </h1>
             <p className="text-xl md:text-2xl text-primary-foreground/80 mb-8 max-w-2xl mx-auto">
-              QR-powered mobile ordering for food trucks. Customers scan, order, and pay – orders go straight to your kitchen.
+              QR-powered mobile ordering for Smackin Jacks. Scan, order, and pay – orders go straight to the kitchen.
             </p>
 
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
@@ -191,7 +191,7 @@ const Index = () => {
             Ready to Streamline Your Orders?
           </h2>
           <p className="text-primary-foreground/80 mb-8">
-            Try the demo to see how TruckBite can transform your food truck operation
+            Try the demo to see how Smackin Jacks can transform your food truck operation
           </p>
           <Button
             size="xl"
@@ -206,7 +206,7 @@ const Index = () => {
       {/* Footer */}
       <footer className="py-8 px-6 border-t border-border">
         <div className="max-w-4xl mx-auto text-center text-muted-foreground text-sm">
-          <p>TruckBite • Mobile-First Food Truck Ordering</p>
+          <p>Smackin Jacks • Mobile-First Food Truck Ordering</p>
         </div>
       </footer>
     </div>

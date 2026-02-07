@@ -1,43 +1,51 @@
-import { useState, useMemo } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { getFoodTruckById, getMenuItemsByCategory } from '@/data/sampleData';
 import { MenuItem } from '@/types';
+import { useMenuItems } from '@/hooks/useMenuItems';
 import { CategoryTabs } from '@/components/menu/CategoryTabs';
 import { MenuItemCard } from '@/components/menu/MenuItemCard';
 import { ItemCustomizer } from '@/components/menu/ItemCustomizer';
 import { CartButton } from '@/components/cart/CartButton';
 import { CartDrawer } from '@/components/cart/CartDrawer';
 import { motion, AnimatePresence } from 'framer-motion';
-import { MapPin, Clock } from 'lucide-react';
+import { MapPin, Clock, Loader2 } from 'lucide-react';
 
 const MenuPage = () => {
   const { truckId = 'demo' } = useParams<{ truckId: string }>();
   const navigate = useNavigate();
-  const truck = getFoodTruckById(truckId);
+  const { items, categories, truckName, truckDescription, isLoading, error } = useMenuItems(truckId);
 
   const [activeCategory, setActiveCategory] = useState<string>('');
   const [selectedItem, setSelectedItem] = useState<MenuItem | null>(null);
   const [isCartOpen, setIsCartOpen] = useState(false);
 
-  // Set initial category
-  useMemo(() => {
-    if (truck && truck.categories.length > 0 && !activeCategory) {
-      setActiveCategory(truck.categories[0]);
+  // Set initial category when categories load
+  useEffect(() => {
+    if (categories.length > 0 && !activeCategory) {
+      setActiveCategory(categories[0]);
     }
-  }, [truck, activeCategory]);
+  }, [categories, activeCategory]);
 
-  if (!truck) {
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center p-4">
+        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  if (error && items.length === 0) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center p-4">
         <div className="text-center">
           <h1 className="text-2xl font-bold text-foreground mb-2">Menu not found</h1>
-          <p className="text-muted-foreground">This food truck doesn't exist</p>
+          <p className="text-muted-foreground">{error}</p>
         </div>
       </div>
     );
   }
 
-  const menuItems = getMenuItemsByCategory(truck.menu, activeCategory);
+  const menuItems = items.filter((item) => item.category === activeCategory);
 
   const handleCheckout = () => {
     setIsCartOpen(false);
@@ -54,9 +62,9 @@ const MenuPage = () => {
           className="text-center"
         >
           <h1 className="text-2xl font-bold text-primary-foreground mb-1">
-            {truck.name}
+            {truckName}
           </h1>
-          <p className="text-primary-foreground/80 text-sm">{truck.description}</p>
+          <p className="text-primary-foreground/80 text-sm">{truckDescription}</p>
           <div className="flex items-center justify-center gap-4 mt-3 text-primary-foreground/70 text-xs">
             <span className="flex items-center gap-1">
               <MapPin className="w-3 h-3" /> Food Truck Row
@@ -71,7 +79,7 @@ const MenuPage = () => {
       {/* Category Tabs */}
       <div className="sticky top-0 bg-background/95 backdrop-blur-sm border-b border-border z-30 px-4">
         <CategoryTabs
-          categories={truck.categories}
+          categories={categories}
           activeCategory={activeCategory}
           onCategoryChange={setActiveCategory}
         />

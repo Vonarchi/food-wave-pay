@@ -35,7 +35,7 @@ const AdminDashboardPage = () => {
           </Button>
           <div>
             <h1 className="text-xl font-bold">System Overview</h1>
-            <p className="text-background/70 text-sm">TruckBite Architecture</p>
+            <p className="text-background/70 text-sm">Smackin Jacks Architecture</p>
           </div>
         </div>
       </header>

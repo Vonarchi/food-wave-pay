@@ -10,8 +10,9 @@ const Index = () => {
     <div className="min-h-screen bg-background">
       {/* Hero Section */}
       <section className="relative overflow-hidden">
-        <div className="absolute inset-0 bg-gradient-to-br from-primary via-primary to-accent opacity-95" />
-        <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAiIGhlaWdodD0iNjAiIHZpZXdCb3g9IjAgMCA2MCA2MCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48ZyBmaWxsPSJub25lIiBmaWxsLXJ1bGU9ImV2ZW5vZGQiPjxnIGZpbGw9IiNmZmYiIGZpbGwtb3BhY2l0eT0iMC4xIj48Y2lyY2xlIGN4PSIzMCIgY3k9IjMwIiByPSIyIi8+PC9nPjwvZz48L3N2Zz4=')] opacity-30" />
+        <div className="absolute inset-0 bg-gradient-to-br from-accent via-accent/90 to-accent/80" />
+        <div className="absolute inset-0 opacity-[0.07]" style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='1'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")` }} />
+        <div className="absolute inset-0 bg-gradient-to-t from-accent/40 via-transparent to-transparent" />
         
         <div className="relative z-10 px-6 py-20 md:py-32 text-center max-w-4xl mx-auto safe-top">
           <motion.div
@@ -19,7 +20,7 @@ const Index = () => {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6 }}
           >
-            <div className="inline-flex items-center gap-2 bg-primary-foreground/10 backdrop-blur-sm px-4 py-2 rounded-full text-primary-foreground/90 text-sm mb-6">
+            <div className="inline-flex items-center gap-2 bg-primary/20 backdrop-blur-sm px-4 py-2 rounded-full text-primary-foreground/90 text-sm mb-6 border border-primary/30">
               <Zap className="w-4 h-4" />
               Turn Every Phone Into an Ordering Terminal
             </div>
@@ -185,17 +186,18 @@ const Index = () => {
           initial={{ opacity: 0, scale: 0.95 }}
           whileInView={{ opacity: 1, scale: 1 }}
           viewport={{ once: true }}
-          className="max-w-2xl mx-auto text-center bg-gradient-to-br from-primary to-accent rounded-3xl p-8 md:p-12"
+          className="max-w-2xl mx-auto text-center bg-accent relative overflow-hidden rounded-3xl p-8 md:p-12"
         >
-          <h2 className="text-2xl md:text-3xl font-bold text-primary-foreground mb-4">
+          <div className="absolute inset-0 opacity-[0.07]" style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='1'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")` }} />
+          <h2 className="relative text-2xl md:text-3xl font-bold text-accent-foreground mb-4">
             Ready to Streamline Your Orders?
           </h2>
-          <p className="text-primary-foreground/80 mb-8">
+          <p className="relative text-accent-foreground/70 mb-8">
             Try the demo to see how Smackin Jacks can transform your food truck operation
           </p>
           <Button
             size="xl"
-            className="bg-primary-foreground text-primary hover:bg-primary-foreground/90"
+            className="relative bg-primary text-primary-foreground hover:bg-primary/90"
             onClick={() => navigate('/menu/demo')}
           >
             Launch Demo

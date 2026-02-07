@@ -2,6 +2,7 @@ import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { motion } from 'framer-motion';
 import { QrCode, Smartphone, ChefHat, Zap, CreditCard, Clock, Settings, LayoutDashboard } from 'lucide-react';
+import logo from '@/assets/logo.jpeg';
 
 const Index = () => {
   const navigate = useNavigate();
@@ -24,9 +25,7 @@ const Index = () => {
               Turn Every Phone Into an Ordering Terminal
             </div>
             
-            <h1 className="text-4xl md:text-6xl font-bold text-primary-foreground mb-6 leading-tight">
-              Smackin Jacks
-            </h1>
+            <img src={logo} alt="Smackin Jacks Sauces and Seasonings" className="w-64 md:w-80 mx-auto mb-2" />
             <p className="text-xl md:text-2xl text-primary-foreground/80 mb-8 max-w-2xl mx-auto">
               QR-powered mobile ordering for Smackin Jacks. Scan, order, and pay – orders go straight to the kitchen.
             </p>

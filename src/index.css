@@ -27,8 +27,8 @@
     --muted: 30 20% 92%;
     --muted-foreground: 220 10% 45%;
 
-    /* Accent - deeper orange */
-    --accent: 15 90% 42%;
+    /* Accent - black */
+    --accent: 0 0% 8%;
     --accent-foreground: 0 0% 100%;
 
     --destructive: 0 84% 60%;

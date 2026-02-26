@@ -8,7 +8,8 @@ import { ItemCustomizer } from '@/components/menu/ItemCustomizer';
 import { CartButton } from '@/components/cart/CartButton';
 import { CartDrawer } from '@/components/cart/CartDrawer';
 import { motion, AnimatePresence } from 'framer-motion';
-import { MapPin, Clock, Loader2 } from 'lucide-react';
+import { MapPin, Clock, Loader2, ArrowLeft } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 
 const MenuPage = () => {
   const { truckId = 'demo' } = useParams<{ truckId: string }>();
@@ -55,7 +56,15 @@ const MenuPage = () => {
   return (
     <div className="min-h-screen bg-background pb-24">
       {/* Header */}
-      <header className="bg-gradient-to-br from-primary to-accent p-6 pt-12 safe-top">
+      <header className="bg-gradient-to-br from-primary to-accent p-6 pt-12 safe-top relative">
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={() => navigate('/')}
+          className="absolute top-12 left-4 text-primary-foreground hover:bg-primary-foreground/10"
+        >
+          <ArrowLeft className="w-5 h-5" />
+        </Button>
         <motion.div
           initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}

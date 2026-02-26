@@ -2,7 +2,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useOrderStore } from '@/store/useStore';
 import { Button } from '@/components/ui/button';
 import { motion } from 'framer-motion';
-import { CheckCircle, Clock, ChefHat } from 'lucide-react';
+import { CheckCircle, Clock, ChefHat, ArrowLeft } from 'lucide-react';
 import { ORDER_STATUS_LABELS } from '@/types';
 
 const ConfirmationPage = () => {
@@ -55,8 +55,16 @@ const ConfirmationPage = () => {
       <motion.div
         initial={{ opacity: 0, scale: 0.9 }}
         animate={{ opacity: 1, scale: 1 }}
-        className="bg-gradient-to-br from-success to-success/80 p-8 pt-16 text-center safe-top"
+        className="bg-gradient-to-br from-success to-success/80 p-8 pt-16 text-center safe-top relative"
       >
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={() => navigate('/')}
+          className="absolute top-16 left-4 text-success-foreground hover:bg-success-foreground/10"
+        >
+          <ArrowLeft className="w-5 h-5" />
+        </Button>
         <motion.div
           initial={{ scale: 0 }}
           animate={{ scale: 1 }}

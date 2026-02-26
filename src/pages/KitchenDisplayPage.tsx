@@ -3,11 +3,13 @@ import { useOrderStore } from '@/store/useStore';
 import { Order, OrderStatus, ORDER_STATUS_LABELS, ORDER_STATUS_COLORS, CartItem } from '@/types';
 import { Button } from '@/components/ui/button';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Bell, ChefHat, Clock, CheckCircle } from 'lucide-react';
+import { Bell, ChefHat, Clock, CheckCircle, ArrowLeft } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 
 const KitchenDisplayPage = () => {
+  const navigate = useNavigate();
   const { orders, updateOrderStatus, getActiveOrders, fetchOrders, setOrders } = useOrderStore();
   const activeOrders = getActiveOrders();
   const prevOrderCountRef = useRef(activeOrders.length);
@@ -125,6 +127,14 @@ const KitchenDisplayPage = () => {
       <header className="bg-foreground text-background p-4 sticky top-0 z-30">
         <div className="flex items-center justify-between max-w-7xl mx-auto">
           <div className="flex items-center gap-3">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => navigate('/')}
+              className="text-background hover:bg-background/10"
+            >
+              <ArrowLeft className="w-5 h-5" />
+            </Button>
             <ChefHat className="w-8 h-8" />
             <div>
               <h1 className="text-xl font-bold">Kitchen Display</h1>

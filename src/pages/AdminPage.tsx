@@ -3,9 +3,12 @@ import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Camera, Upload, ArrowLeft, Trash2, Check, Loader2, ImageIcon, Plus, Edit2, Image as ImageIconLucide, QrCode, Download } from 'lucide-react';
+import { Camera, Upload, ArrowLeft, Trash2, Check, Loader2, ImageIcon, Plus, Edit2, Image as ImageIconLucide, QrCode, Download, Settings2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { QRCodeSVG } from 'qrcode.react';
+import { ModifierEditor } from '@/components/admin/ModifierEditor';
+import { ModifierGroup } from '@/types';
+import { AnimatePresence } from 'framer-motion';
 
 interface ExtractedItem {
   name: string;

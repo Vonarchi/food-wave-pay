@@ -57,9 +57,8 @@ const MenuPage = () => {
     <div className="min-h-screen bg-background pb-24">
       {/* Header */}
       <header
-        className="p-6 pt-12 safe-top relative"
+        className={`p-6 pt-12 safe-top relative ${!truckAccentColor ? 'bg-gradient-to-br from-primary to-accent' : ''}`}
         style={truckAccentColor ? { background: truckAccentColor } : undefined}
-        {...(!truckAccentColor ? { className: "bg-gradient-to-br from-primary to-accent p-6 pt-12 safe-top relative" } : {})}
       >
         <Button
           variant="ghost"

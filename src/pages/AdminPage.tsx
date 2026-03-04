@@ -622,6 +622,42 @@ const AdminPage = () => {
           </div>
         </motion.section>
       </div>
+
+      {/* Modifier Editor Modal */}
+      <AnimatePresence>
+        {editingModifiersItem && (
+          <ModifierEditor
+            itemName={editingModifiersItem.name}
+            initialModifiers={
+              Array.isArray(editingModifiersItem.modifiers)
+                ? (editingModifiersItem.modifiers as ModifierGroup[])
+                : []
+            }
+            onClose={() => setEditingModifiersItem(null)}
+            onSave={async (modifiers) => {
+              try {
+                const { error } = await supabase
+                  .from('menu_items')
+                  .update({ modifiers: modifiers as any })
+                  .eq('id', editingModifiersItem.id);
+                if (error) throw error;
+                setExistingItems((items) =>
+                  items.map((item) =>
+                    item.id === editingModifiersItem.id
+                      ? { ...item, modifiers }
+                      : item
+                  )
+                );
+                toast.success('Modifiers saved!');
+                setEditingModifiersItem(null);
+              } catch (err) {
+                console.error(err);
+                toast.error('Failed to save modifiers');
+              }
+            }}
+          />
+        )}
+      </AnimatePresence>
     </div>
   );
 };

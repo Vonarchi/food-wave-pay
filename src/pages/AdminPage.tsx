@@ -181,7 +181,7 @@ const AdminPage = () => {
       setLoadingExisting(true);
       const { data } = await supabase
         .from('menu_items')
-        .select('id, name, price, category, image_url')
+        .select('id, name, price, category, image_url, modifiers')
         .eq('truck_id', truckId)
         .order('category')
         .order('name');

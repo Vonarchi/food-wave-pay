@@ -5,8 +5,32 @@ import { motion } from 'framer-motion';
 import { QrCode, Smartphone, ChefHat, Zap, CreditCard, Clock, Settings, LayoutDashboard, Store, ArrowRight, Loader2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 
+interface TruckListing {
+  slug: string;
+  name: string;
+  description: string | null;
+  logo_url: string | null;
+  accent_color: string | null;
+  location: string | null;
+}
+
 const Index = () => {
   const navigate = useNavigate();
+  const [trucks, setTrucks] = useState<TruckListing[]>([]);
+  const [trucksLoading, setTrucksLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchTrucks = async () => {
+      const { data } = await supabase
+        .from('food_trucks')
+        .select('slug, name, description, logo_url, accent_color, location')
+        .eq('is_active', true)
+        .order('name');
+      setTrucks((data as TruckListing[]) || []);
+      setTrucksLoading(false);
+    };
+    fetchTrucks();
+  }, []);
 
   return (
     <div className="min-h-screen bg-background">

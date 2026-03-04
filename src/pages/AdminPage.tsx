@@ -168,10 +168,12 @@ const AdminPage = () => {
     price: number;
     category: string;
     image_url: string | null;
+    modifiers: unknown;
   }
   const [existingItems, setExistingItems] = useState<DbMenuItem[]>([]);
   const [loadingExisting, setLoadingExisting] = useState(false);
   const [uploadingItemId, setUploadingItemId] = useState<string | null>(null);
+  const [editingModifiersItem, setEditingModifiersItem] = useState<DbMenuItem | null>(null);
   const itemImageInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {

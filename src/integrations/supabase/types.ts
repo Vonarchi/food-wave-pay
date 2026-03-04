@@ -14,6 +14,39 @@ export type Database = {
   }
   public: {
     Tables: {
+      customers: {
+        Row: {
+          created_at: string
+          id: string
+          last_order_at: string
+          name: string
+          order_count: number
+          total_spent: number
+          truck_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          last_order_at?: string
+          name: string
+          order_count?: number
+          total_spent?: number
+          truck_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          last_order_at?: string
+          name?: string
+          order_count?: number
+          total_spent?: number
+          truck_id?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       food_trucks: {
         Row: {
           accent_color: string | null

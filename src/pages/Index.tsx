@@ -1,10 +1,36 @@
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { motion } from 'framer-motion';
-import { QrCode, Smartphone, ChefHat, Zap, CreditCard, Clock, Settings, LayoutDashboard } from 'lucide-react';
+import { QrCode, Smartphone, ChefHat, Zap, CreditCard, Clock, Settings, LayoutDashboard, Store, ArrowRight, Loader2 } from 'lucide-react';
+import { supabase } from '@/integrations/supabase/client';
+
+interface TruckListing {
+  slug: string;
+  name: string;
+  description: string | null;
+  logo_url: string | null;
+  accent_color: string | null;
+  location: string | null;
+}
 
 const Index = () => {
   const navigate = useNavigate();
+  const [trucks, setTrucks] = useState<TruckListing[]>([]);
+  const [trucksLoading, setTrucksLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchTrucks = async () => {
+      const { data } = await supabase
+        .from('food_trucks')
+        .select('slug, name, description, logo_url, accent_color, location')
+        .eq('is_active', true)
+        .order('name');
+      setTrucks((data as TruckListing[]) || []);
+      setTrucksLoading(false);
+    };
+    fetchTrucks();
+  }, []);
 
   return (
     <div className="min-h-screen bg-background">
@@ -120,6 +146,66 @@ const Index = () => {
               </motion.div>
             ))}
           </div>
+        </div>
+      </section>
+
+      {/* Restaurant Directory */}
+      <section className="py-16 px-6">
+        <div className="max-w-4xl mx-auto">
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            className="text-center mb-12"
+          >
+            <h2 className="text-3xl font-bold text-foreground mb-4">Order Online</h2>
+            <p className="text-muted-foreground">Browse restaurants and order directly — no QR code needed</p>
+          </motion.div>
+
+          {trucksLoading ? (
+            <div className="flex justify-center py-12">
+              <Loader2 className="w-8 h-8 animate-spin text-primary" />
+            </div>
+          ) : trucks.length === 0 ? (
+            <p className="text-center text-muted-foreground py-8">No restaurants available yet. Try the demo menu above!</p>
+          ) : (
+            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {trucks.map((truck, index) => (
+                <motion.button
+                  key={truck.slug}
+                  initial={{ opacity: 0, y: 20 }}
+                  whileInView={{ opacity: 1, y: 0 }}
+                  viewport={{ once: true }}
+                  transition={{ delay: index * 0.05 }}
+                  onClick={() => navigate(`/order/${truck.slug}`)}
+                  className="bg-card rounded-2xl border border-border p-5 text-left hover:shadow-lg hover:border-primary/30 transition-all group"
+                >
+                  <div className="flex items-center gap-3 mb-3">
+                    {truck.logo_url ? (
+                      <img src={truck.logo_url} alt={truck.name} className="w-12 h-12 rounded-xl object-contain bg-muted p-1" />
+                    ) : (
+                      <div
+                        className="w-12 h-12 rounded-xl flex items-center justify-center text-primary-foreground"
+                        style={{ background: truck.accent_color || 'hsl(var(--primary))' }}
+                      >
+                        <Store className="w-6 h-6" />
+                      </div>
+                    )}
+                    <div className="flex-1 min-w-0">
+                      <h3 className="font-bold text-foreground truncate">{truck.name}</h3>
+                      {truck.location && (
+                        <p className="text-xs text-muted-foreground truncate">{truck.location}</p>
+                      )}
+                    </div>
+                    <ArrowRight className="w-5 h-5 text-muted-foreground group-hover:text-primary transition-colors flex-shrink-0" />
+                  </div>
+                  {truck.description && (
+                    <p className="text-sm text-muted-foreground line-clamp-2">{truck.description}</p>
+                  )}
+                </motion.button>
+              ))}
+            </div>
+          )}
         </div>
       </section>
 

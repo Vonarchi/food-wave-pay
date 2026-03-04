@@ -3,9 +3,11 @@ import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Camera, Upload, ArrowLeft, Trash2, Check, Loader2, ImageIcon, Plus, Edit2, Image as ImageIconLucide, QrCode, Download } from 'lucide-react';
+import { Camera, Upload, ArrowLeft, Trash2, Check, Loader2, ImageIcon, Plus, Edit2, Image as ImageIconLucide, QrCode, Download, Settings2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { QRCodeSVG } from 'qrcode.react';
+import { ModifierEditor } from '@/components/admin/ModifierEditor';
+import { ModifierGroup } from '@/types';
 
 interface ExtractedItem {
   name: string;
@@ -166,10 +168,12 @@ const AdminPage = () => {
     price: number;
     category: string;
     image_url: string | null;
+    modifiers: unknown;
   }
   const [existingItems, setExistingItems] = useState<DbMenuItem[]>([]);
   const [loadingExisting, setLoadingExisting] = useState(false);
   const [uploadingItemId, setUploadingItemId] = useState<string | null>(null);
+  const [editingModifiersItem, setEditingModifiersItem] = useState<DbMenuItem | null>(null);
   const itemImageInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -177,7 +181,7 @@ const AdminPage = () => {
       setLoadingExisting(true);
       const { data } = await supabase
         .from('menu_items')
-        .select('id, name, price, category, image_url')
+        .select('id, name, price, category, image_url, modifiers')
         .eq('truck_id', truckId)
         .order('category')
         .order('name');
@@ -520,19 +524,34 @@ const AdminPage = () => {
                   )}
                   <div className="flex-1 min-w-0">
                     <p className="font-medium text-foreground text-sm truncate">{item.name}</p>
-                    <p className="text-xs text-muted-foreground">{item.category} • ${item.price.toFixed(2)}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {item.category} • ${item.price.toFixed(2)}
+                      {Array.isArray(item.modifiers) && (item.modifiers as any[]).length > 0 && (
+                        <span className="text-primary ml-1">• {(item.modifiers as any[]).length} modifier{(item.modifiers as any[]).length > 1 ? 's' : ''}</span>
+                      )}
+                    </p>
                   </div>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => {
-                      setUploadingItemId(item.id);
-                      itemImageInputRef.current?.click();
-                    }}
-                  >
-                    <Upload className="w-3 h-3 mr-1" />
-                    {item.image_url ? 'Change' : 'Add'} Photo
-                  </Button>
+                  <div className="flex gap-1 shrink-0">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setEditingModifiersItem(item)}
+                    >
+                      <Settings2 className="w-3 h-3 mr-1" />
+                      Modifiers
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        setUploadingItemId(item.id);
+                        itemImageInputRef.current?.click();
+                      }}
+                    >
+                      <Upload className="w-3 h-3 mr-1" />
+                      {item.image_url ? 'Change' : 'Add'} Photo
+                    </Button>
+                  </div>
                 </div>
               ))}
             </div>
@@ -603,6 +622,42 @@ const AdminPage = () => {
           </div>
         </motion.section>
       </div>
+
+      {/* Modifier Editor Modal */}
+      <AnimatePresence>
+        {editingModifiersItem && (
+          <ModifierEditor
+            itemName={editingModifiersItem.name}
+            initialModifiers={
+              Array.isArray(editingModifiersItem.modifiers)
+                ? (editingModifiersItem.modifiers as ModifierGroup[])
+                : []
+            }
+            onClose={() => setEditingModifiersItem(null)}
+            onSave={async (modifiers) => {
+              try {
+                const { error } = await supabase
+                  .from('menu_items')
+                  .update({ modifiers: modifiers as any })
+                  .eq('id', editingModifiersItem.id);
+                if (error) throw error;
+                setExistingItems((items) =>
+                  items.map((item) =>
+                    item.id === editingModifiersItem.id
+                      ? { ...item, modifiers }
+                      : item
+                  )
+                );
+                toast.success('Modifiers saved!');
+                setEditingModifiersItem(null);
+              } catch (err) {
+                console.error(err);
+                toast.error('Failed to save modifiers');
+              }
+            }}
+          />
+        )}
+      </AnimatePresence>
     </div>
   );
 };

@@ -14,7 +14,7 @@ import { Button } from '@/components/ui/button';
 const MenuPage = () => {
   const { truckId = 'demo' } = useParams<{ truckId: string }>();
   const navigate = useNavigate();
-  const { items, categories, truckName, truckDescription, truckLocation, truckHours, isLoading, error } = useMenuItems(truckId);
+  const { items, categories, truckName, truckDescription, truckLocation, truckHours, truckLogo, truckAccentColor, isLoading, error } = useMenuItems(truckId);
 
   const [activeCategory, setActiveCategory] = useState<string>('');
   const [selectedItem, setSelectedItem] = useState<MenuItem | null>(null);

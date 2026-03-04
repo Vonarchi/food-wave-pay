@@ -14,7 +14,7 @@ import { Button } from '@/components/ui/button';
 const MenuPage = () => {
   const { truckId = 'demo' } = useParams<{ truckId: string }>();
   const navigate = useNavigate();
-  const { items, categories, truckName, truckDescription, isLoading, error } = useMenuItems(truckId);
+  const { items, categories, truckName, truckDescription, truckLocation, truckHours, isLoading, error } = useMenuItems(truckId);
 
   const [activeCategory, setActiveCategory] = useState<string>('');
   const [selectedItem, setSelectedItem] = useState<MenuItem | null>(null);
@@ -76,10 +76,10 @@ const MenuPage = () => {
           <p className="text-primary-foreground/80 text-sm">{truckDescription}</p>
           <div className="flex items-center justify-center gap-4 mt-3 text-primary-foreground/70 text-xs">
             <span className="flex items-center gap-1">
-              <MapPin className="w-3 h-3" /> Food Truck Row
+              <MapPin className="w-3 h-3" /> {truckLocation}
             </span>
             <span className="flex items-center gap-1">
-              <Clock className="w-3 h-3" /> 11am - 8pm
+              <Clock className="w-3 h-3" /> {truckHours}
             </span>
           </div>
         </motion.div>

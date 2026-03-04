@@ -8,14 +8,14 @@ interface UseMenuItemsResult {
   categories: string[];
   truckName: string;
   truckDescription: string;
+  truckLocation: string;
+  truckHours: string;
+  truckLogo?: string;
+  truckCoverImage?: string;
   isLoading: boolean;
   error: string | null;
 }
 
-/**
- * Maps a database menu_items row to a front-end MenuItem.
- * The `modifiers` column in the DB is stored as JSONB.
- */
 const mapDbItemToMenuItem = (row: {
   id: string;
   name: string;
@@ -50,34 +50,62 @@ export const useMenuItems = (truckId: string): UseMenuItemsResult => {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [usingFallback, setUsingFallback] = useState(false);
+  const [truckInfo, setTruckInfo] = useState<{
+    name: string;
+    description: string;
+    location: string;
+    hours: string;
+    logo_url?: string;
+    cover_image_url?: string;
+  } | null>(null);
 
   useEffect(() => {
-    const fetchMenuItems = async () => {
+    const fetchData = async () => {
       setIsLoading(true);
       setError(null);
 
       try {
-        const { data, error: dbError } = await supabase
-          .from('menu_items')
-          .select('*')
-          .eq('truck_id', truckId)
-          .order('category')
-          .order('name');
+        // Fetch truck info and menu items in parallel
+        const [truckResult, menuResult] = await Promise.all([
+          supabase
+            .from('food_trucks' as any)
+            .select('*')
+            .eq('slug', truckId)
+            .maybeSingle(),
+          supabase
+            .from('menu_items')
+            .select('*')
+            .eq('truck_id', truckId)
+            .order('category')
+            .order('name'),
+        ]);
 
-        if (dbError) throw dbError;
+        // Set truck info
+        if (truckResult.data) {
+          const t = truckResult.data as any;
+          setTruckInfo({
+            name: t.name,
+            description: t.description || '',
+            location: t.location || 'Food Truck Row',
+            hours: t.hours || '11am - 8pm',
+            logo_url: t.logo_url || undefined,
+            cover_image_url: t.cover_image_url || undefined,
+          });
+        }
 
-        if (data && data.length > 0) {
-          setItems(data.map(mapDbItemToMenuItem));
+        // Set menu items
+        if (menuResult.error) throw menuResult.error;
+
+        if (menuResult.data && menuResult.data.length > 0) {
+          setItems(menuResult.data.map(mapDbItemToMenuItem));
           setUsingFallback(false);
         } else {
-          // No items in DB for this truck – fall back to sample data
           setItems(sampleFoodTruck.menu);
           setUsingFallback(true);
         }
       } catch (err) {
         console.error('Failed to fetch menu items:', err);
         setError('Failed to load menu');
-        // Fall back to sample data on error
         setItems(sampleFoodTruck.menu);
         setUsingFallback(true);
       } finally {
@@ -85,18 +113,28 @@ export const useMenuItems = (truckId: string): UseMenuItemsResult => {
       }
     };
 
-    fetchMenuItems();
+    fetchData();
   }, [truckId]);
 
-  // Derive unique categories preserving DB order
   const categories = usingFallback
     ? sampleFoodTruck.categories
     : [...new Set(items.map((i) => i.category))];
 
-  const truckName = usingFallback ? sampleFoodTruck.name : 'Smackin Jacks';
-  const truckDescription = usingFallback
-    ? sampleFoodTruck.description
-    : 'Order fresh food, made to order';
+  const truckName = truckInfo?.name || (usingFallback ? sampleFoodTruck.name : 'Smackin Jacks');
+  const truckDescription = truckInfo?.description || (usingFallback ? sampleFoodTruck.description : 'Order fresh food, made to order');
+  const truckLocation = truckInfo?.location || 'Food Truck Row';
+  const truckHours = truckInfo?.hours || '11am - 8pm';
 
-  return { items, categories, truckName, truckDescription, isLoading, error };
+  return {
+    items,
+    categories,
+    truckName,
+    truckDescription,
+    truckLocation,
+    truckHours,
+    truckLogo: truckInfo?.logo_url,
+    truckCoverImage: truckInfo?.cover_image_url,
+    isLoading,
+    error,
+  };
 };

@@ -1,9 +1,9 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Camera, Upload, ArrowLeft, Trash2, Check, Loader2, ImageIcon, Plus, Edit2 } from 'lucide-react';
+import { Camera, Upload, ArrowLeft, Trash2, Check, Loader2, ImageIcon, Plus, Edit2, Image as ImageIconLucide } from 'lucide-react';
 import { toast } from 'sonner';
 
 interface ExtractedItem {
@@ -157,6 +157,72 @@ const AdminPage = () => {
   };
 
   const categories = [...new Set(extractedItems.map((item) => item.category))];
+
+  // --- Existing menu items management ---
+  interface DbMenuItem {
+    id: string;
+    name: string;
+    price: number;
+    category: string;
+    image_url: string | null;
+  }
+  const [existingItems, setExistingItems] = useState<DbMenuItem[]>([]);
+  const [loadingExisting, setLoadingExisting] = useState(false);
+  const [uploadingItemId, setUploadingItemId] = useState<string | null>(null);
+  const itemImageInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    const fetchExisting = async () => {
+      setLoadingExisting(true);
+      const { data } = await supabase
+        .from('menu_items')
+        .select('id, name, price, category, image_url')
+        .eq('truck_id', truckId)
+        .order('category')
+        .order('name');
+      setExistingItems((data as DbMenuItem[]) || []);
+      setLoadingExisting(false);
+    };
+    fetchExisting();
+  }, [truckId, isSaving]); // re-fetch after saving new items
+
+  const handleItemImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file || !uploadingItemId) return;
+
+    try {
+      const fileName = `item-${uploadingItemId}-${Date.now()}.${file.name.split('.').pop()}`;
+      const { error: uploadError } = await supabase.storage
+        .from('menu-images')
+        .upload(fileName, file);
+
+      if (uploadError) throw uploadError;
+
+      const { data: urlData } = supabase.storage
+        .from('menu-images')
+        .getPublicUrl(fileName);
+
+      const { error: updateError } = await supabase
+        .from('menu_items')
+        .update({ image_url: urlData.publicUrl })
+        .eq('id', uploadingItemId);
+
+      if (updateError) throw updateError;
+
+      setExistingItems((items) =>
+        items.map((item) =>
+          item.id === uploadingItemId ? { ...item, image_url: urlData.publicUrl } : item
+        )
+      );
+      toast.success('Image uploaded!');
+    } catch (err) {
+      console.error('Image upload error:', err);
+      toast.error('Failed to upload image');
+    } finally {
+      setUploadingItemId(null);
+      if (itemImageInputRef.current) itemImageInputRef.current.value = '';
+    }
+  };
 
   return (
     <div className="min-h-screen bg-background">
@@ -407,6 +473,70 @@ const AdminPage = () => {
             </motion.section>
           )}
         </AnimatePresence>
+
+        {/* Existing Menu Items - Image Management */}
+        <motion.section
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.2 }}
+          className="bg-card rounded-2xl border border-border p-4"
+        >
+          <h2 className="font-semibold text-foreground mb-4">
+            Existing Menu Items ({existingItems.length})
+          </h2>
+
+          <input
+            ref={itemImageInputRef}
+            type="file"
+            accept="image/*"
+            onChange={handleItemImageUpload}
+            className="hidden"
+          />
+
+          {loadingExisting ? (
+            <div className="flex justify-center py-8">
+              <Loader2 className="w-6 h-6 animate-spin text-primary" />
+            </div>
+          ) : existingItems.length === 0 ? (
+            <p className="text-muted-foreground text-sm text-center py-6">
+              No menu items yet. Use the image capture above or add items manually.
+            </p>
+          ) : (
+            <div className="space-y-2">
+              {existingItems.map((item) => (
+                <div
+                  key={item.id}
+                  className="flex items-center gap-3 p-3 rounded-lg border border-border"
+                >
+                  {item.image_url ? (
+                    <div className="w-12 h-12 rounded-lg overflow-hidden flex-shrink-0 border border-border">
+                      <img src={item.image_url} alt={item.name} className="w-full h-full object-cover" />
+                    </div>
+                  ) : (
+                    <div className="w-12 h-12 rounded-lg bg-secondary flex items-center justify-center flex-shrink-0">
+                      <ImageIconLucide className="w-5 h-5 text-muted-foreground" />
+                    </div>
+                  )}
+                  <div className="flex-1 min-w-0">
+                    <p className="font-medium text-foreground text-sm truncate">{item.name}</p>
+                    <p className="text-xs text-muted-foreground">{item.category} • ${item.price.toFixed(2)}</p>
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      setUploadingItemId(item.id);
+                      itemImageInputRef.current?.click();
+                    }}
+                  >
+                    <Upload className="w-3 h-3 mr-1" />
+                    {item.image_url ? 'Change' : 'Add'} Photo
+                  </Button>
+                </div>
+              ))}
+            </div>
+          )}
+        </motion.section>
       </div>
     </div>
   );

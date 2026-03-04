@@ -524,19 +524,34 @@ const AdminPage = () => {
                   )}
                   <div className="flex-1 min-w-0">
                     <p className="font-medium text-foreground text-sm truncate">{item.name}</p>
-                    <p className="text-xs text-muted-foreground">{item.category} • ${item.price.toFixed(2)}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {item.category} • ${item.price.toFixed(2)}
+                      {Array.isArray(item.modifiers) && (item.modifiers as any[]).length > 0 && (
+                        <span className="text-primary ml-1">• {(item.modifiers as any[]).length} modifier{(item.modifiers as any[]).length > 1 ? 's' : ''}</span>
+                      )}
+                    </p>
                   </div>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => {
-                      setUploadingItemId(item.id);
-                      itemImageInputRef.current?.click();
-                    }}
-                  >
-                    <Upload className="w-3 h-3 mr-1" />
-                    {item.image_url ? 'Change' : 'Add'} Photo
-                  </Button>
+                  <div className="flex gap-1 shrink-0">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setEditingModifiersItem(item)}
+                    >
+                      <Settings2 className="w-3 h-3 mr-1" />
+                      Modifiers
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        setUploadingItemId(item.id);
+                        itemImageInputRef.current?.click();
+                      }}
+                    >
+                      <Upload className="w-3 h-3 mr-1" />
+                      {item.image_url ? 'Change' : 'Add'} Photo
+                    </Button>
+                  </div>
                 </div>
               ))}
             </div>

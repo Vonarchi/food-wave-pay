@@ -1,7 +1,9 @@
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { motion } from 'framer-motion';
-import { QrCode, Smartphone, ChefHat, Zap, CreditCard, Clock, Settings, LayoutDashboard } from 'lucide-react';
+import { QrCode, Smartphone, ChefHat, Zap, CreditCard, Clock, Settings, LayoutDashboard, Store, ArrowRight, Loader2 } from 'lucide-react';
+import { supabase } from '@/integrations/supabase/client';
 
 const Index = () => {
   const navigate = useNavigate();

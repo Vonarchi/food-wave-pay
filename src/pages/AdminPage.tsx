@@ -269,6 +269,14 @@ const AdminPage = () => {
           />
         </motion.section>
 
+        {/* Branding Settings */}
+        <BrandingSettings
+          truckId={truckId}
+          onUpdate={(updates) => {
+            console.log('Branding updated:', updates);
+          }}
+        />
+
         {/* Image Capture Section */}
         <motion.section
           initial={{ opacity: 0, y: 20 }}

@@ -8,7 +8,6 @@ import { toast } from 'sonner';
 import { QRCodeSVG } from 'qrcode.react';
 import { ModifierEditor } from '@/components/admin/ModifierEditor';
 import { ModifierGroup } from '@/types';
-import { ModifierGroup } from '@/types';
 
 interface ExtractedItem {
   name: string;

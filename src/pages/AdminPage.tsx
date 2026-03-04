@@ -7,6 +7,7 @@ import { Camera, Upload, ArrowLeft, Trash2, Check, Loader2, ImageIcon, Plus, Edi
 import { toast } from 'sonner';
 import { QRCodeSVG } from 'qrcode.react';
 import { ModifierEditor } from '@/components/admin/ModifierEditor';
+import { BrandingSettings } from '@/components/admin/BrandingSettings';
 import { ModifierGroup } from '@/types';
 
 interface ExtractedItem {
@@ -267,6 +268,14 @@ const AdminPage = () => {
             className="w-full p-3 rounded-lg border border-border bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
           />
         </motion.section>
+
+        {/* Branding Settings */}
+        <BrandingSettings
+          truckId={truckId}
+          onUpdate={(updates) => {
+            console.log('Branding updated:', updates);
+          }}
+        />
 
         {/* Image Capture Section */}
         <motion.section

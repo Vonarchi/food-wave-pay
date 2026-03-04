@@ -137,6 +137,7 @@ export const useMenuItems = (truckId: string): UseMenuItemsResult => {
     truckHours,
     truckLogo: truckInfo?.logo_url,
     truckCoverImage: truckInfo?.cover_image_url,
+    truckAccentColor: truckInfo?.accent_color,
     isLoading,
     error,
   };

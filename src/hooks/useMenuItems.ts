@@ -12,6 +12,7 @@ interface UseMenuItemsResult {
   truckHours: string;
   truckLogo?: string;
   truckCoverImage?: string;
+  truckAccentColor?: string;
   isLoading: boolean;
   error: string | null;
 }

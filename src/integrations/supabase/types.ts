@@ -16,6 +16,7 @@ export type Database = {
     Tables: {
       food_trucks: {
         Row: {
+          accent_color: string | null
           cover_image_url: string | null
           created_at: string
           description: string | null
@@ -29,6 +30,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          accent_color?: string | null
           cover_image_url?: string | null
           created_at?: string
           description?: string | null
@@ -42,6 +44,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          accent_color?: string | null
           cover_image_url?: string | null
           created_at?: string
           description?: string | null

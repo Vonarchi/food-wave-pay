@@ -1,0 +1,1 @@
+ALTER TABLE public.food_trucks ADD COLUMN IF NOT EXISTS accent_color text DEFAULT '#F3310A';

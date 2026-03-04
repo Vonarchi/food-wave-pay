@@ -1,10 +1,11 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Camera, Upload, ArrowLeft, Trash2, Check, Loader2, ImageIcon, Plus, Edit2, Image as ImageIconLucide } from 'lucide-react';
+import { Camera, Upload, ArrowLeft, Trash2, Check, Loader2, ImageIcon, Plus, Edit2, Image as ImageIconLucide, QrCode, Download } from 'lucide-react';
 import { toast } from 'sonner';
+import { QRCodeSVG } from 'qrcode.react';
 
 interface ExtractedItem {
   name: string;
@@ -536,6 +537,70 @@ const AdminPage = () => {
               ))}
             </div>
           )}
+        </motion.section>
+
+        {/* QR Code Generator */}
+        <motion.section
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.3 }}
+          className="bg-card rounded-2xl border border-border p-6"
+        >
+          <div className="flex items-center gap-2 mb-4">
+            <QrCode className="w-5 h-5 text-primary" />
+            <h2 className="font-semibold text-foreground">QR Code for Menu</h2>
+          </div>
+
+          <p className="text-sm text-muted-foreground mb-6">
+            Print this QR code and place it at your truck. Customers scan it to open your menu instantly.
+          </p>
+
+          <div className="flex flex-col items-center gap-6">
+            <div id="qr-code-container" className="bg-background p-6 rounded-2xl border border-border shadow-sm">
+              <QRCodeSVG
+                value={`${window.location.origin}/menu/${truckId}`}
+                size={200}
+                level="H"
+                includeMargin
+                className="mx-auto"
+              />
+              <p className="text-center text-xs text-muted-foreground mt-3 font-medium">
+                {truckId}
+              </p>
+            </div>
+
+            <div className="text-center space-y-2">
+              <p className="text-xs text-muted-foreground break-all">
+                {window.location.origin}/menu/{truckId}
+              </p>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  const svg = document.querySelector('#qr-code-container svg');
+                  if (!svg) return;
+                  const svgData = new XMLSerializer().serializeToString(svg);
+                  const canvas = document.createElement('canvas');
+                  const ctx = canvas.getContext('2d');
+                  const img = new Image();
+                  img.onload = () => {
+                    canvas.width = img.width * 2;
+                    canvas.height = img.height * 2;
+                    ctx!.fillStyle = '#ffffff';
+                    ctx!.fillRect(0, 0, canvas.width, canvas.height);
+                    ctx!.drawImage(img, 0, 0, canvas.width, canvas.height);
+                    const a = document.createElement('a');
+                    a.download = `qr-${truckId}.png`;
+                    a.href = canvas.toDataURL('image/png');
+                    a.click();
+                  };
+                  img.src = 'data:image/svg+xml;base64,' + btoa(svgData);
+                }}
+              >
+                <Download className="w-4 h-4 mr-2" />
+                Download QR Code
+              </Button>
+            </div>
+          </div>
         </motion.section>
       </div>
     </div>

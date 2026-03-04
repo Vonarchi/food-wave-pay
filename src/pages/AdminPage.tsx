@@ -7,6 +7,7 @@ import { Camera, Upload, ArrowLeft, Trash2, Check, Loader2, ImageIcon, Plus, Edi
 import { toast } from 'sonner';
 import { QRCodeSVG } from 'qrcode.react';
 import { ModifierEditor } from '@/components/admin/ModifierEditor';
+import { BrandingSettings } from '@/components/admin/BrandingSettings';
 import { ModifierGroup } from '@/types';
 
 interface ExtractedItem {

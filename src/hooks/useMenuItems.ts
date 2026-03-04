@@ -58,6 +58,7 @@ export const useMenuItems = (truckId: string): UseMenuItemsResult => {
     hours: string;
     logo_url?: string;
     cover_image_url?: string;
+    accent_color?: string;
   } | null>(null);
 
   useEffect(() => {

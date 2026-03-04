@@ -56,12 +56,16 @@ const MenuPage = () => {
   return (
     <div className="min-h-screen bg-background pb-24">
       {/* Header */}
-      <header className="bg-gradient-to-br from-primary to-accent p-6 pt-12 safe-top relative">
+      <header
+        className="p-6 pt-12 safe-top relative"
+        style={truckAccentColor ? { background: truckAccentColor } : undefined}
+        {...(!truckAccentColor ? { className: "bg-gradient-to-br from-primary to-accent p-6 pt-12 safe-top relative" } : {})}
+      >
         <Button
           variant="ghost"
           size="icon"
           onClick={() => navigate('/')}
-          className="absolute top-12 left-4 text-primary-foreground hover:bg-primary-foreground/10"
+          className="absolute top-12 left-4 text-white hover:bg-white/10"
         >
           <ArrowLeft className="w-5 h-5" />
         </Button>
@@ -70,11 +74,14 @@ const MenuPage = () => {
           animate={{ opacity: 1, y: 0 }}
           className="text-center"
         >
-          <h1 className="text-2xl font-bold text-primary-foreground mb-1">
+          {truckLogo && (
+            <img src={truckLogo} alt={truckName} className="w-16 h-16 rounded-2xl object-contain mx-auto mb-3 bg-white/20 p-1" />
+          )}
+          <h1 className="text-2xl font-bold text-white mb-1">
             {truckName}
           </h1>
-          <p className="text-primary-foreground/80 text-sm">{truckDescription}</p>
-          <div className="flex items-center justify-center gap-4 mt-3 text-primary-foreground/70 text-xs">
+          <p className="text-white/80 text-sm">{truckDescription}</p>
+          <div className="flex items-center justify-center gap-4 mt-3 text-white/70 text-xs">
             <span className="flex items-center gap-1">
               <MapPin className="w-3 h-3" /> {truckLocation}
             </span>

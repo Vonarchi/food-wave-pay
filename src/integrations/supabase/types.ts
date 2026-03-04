@@ -14,6 +14,48 @@ export type Database = {
   }
   public: {
     Tables: {
+      food_trucks: {
+        Row: {
+          cover_image_url: string | null
+          created_at: string
+          description: string | null
+          hours: string | null
+          id: string
+          is_active: boolean
+          location: string | null
+          logo_url: string | null
+          name: string
+          slug: string
+          updated_at: string
+        }
+        Insert: {
+          cover_image_url?: string | null
+          created_at?: string
+          description?: string | null
+          hours?: string | null
+          id?: string
+          is_active?: boolean
+          location?: string | null
+          logo_url?: string | null
+          name: string
+          slug: string
+          updated_at?: string
+        }
+        Update: {
+          cover_image_url?: string | null
+          created_at?: string
+          description?: string | null
+          hours?: string | null
+          id?: string
+          is_active?: boolean
+          location?: string | null
+          logo_url?: string | null
+          name?: string
+          slug?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       menu_items: {
         Row: {
           category: string

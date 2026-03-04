@@ -92,6 +92,7 @@ export const useMenuItems = (truckId: string): UseMenuItemsResult => {
             hours: t.hours || '11am - 8pm',
             logo_url: t.logo_url || undefined,
             cover_image_url: t.cover_image_url || undefined,
+            accent_color: t.accent_color || undefined,
           });
         }
 

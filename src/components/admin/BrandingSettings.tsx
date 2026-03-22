@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Upload, Palette, Save, Loader2, X, Trash2 } from 'lucide-react';
@@ -26,6 +26,11 @@ const PRESET_COLORS = [
 export const BrandingSettings = ({ truckId, currentLogoUrl, currentAccentColor, onUpdate }: BrandingSettingsProps) => {
   const [logoUrl, setLogoUrl] = useState(currentLogoUrl || '');
   const [accentColor, setAccentColor] = useState(currentAccentColor || '#F3310A');
+
+  useEffect(() => {
+    if (currentLogoUrl !== undefined) setLogoUrl(currentLogoUrl || '');
+    if (currentAccentColor) setAccentColor(currentAccentColor);
+  }, [currentLogoUrl, currentAccentColor]);
   const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);

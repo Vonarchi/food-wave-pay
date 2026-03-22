@@ -125,7 +125,7 @@ const AdminDashboardPage = () => {
               <div className="flex items-center gap-4">
                 <FlowNode 
                   icon={<Database className="w-6 h-6" />}
-                  label="Lovable Cloud"
+                  label="Supabase"
                   sublabel="PostgreSQL + Realtime"
                   color="bg-accent"
                 />
@@ -267,7 +267,7 @@ const AdminDashboardPage = () => {
                 </div>
               </div>
               <div>
-                <p className="text-sm font-medium text-foreground mb-2">Backend (Lovable Cloud)</p>
+                <p className="text-sm font-medium text-foreground mb-2">Backend</p>
                 <div className="flex flex-wrap gap-2">
                   {['PostgreSQL', 'Real-time Subscriptions', 'Edge Functions', 'Storage Buckets'].map((tech) => (
                     <span key={tech} className="text-xs bg-accent/10 text-accent px-2 py-1 rounded">
@@ -279,7 +279,7 @@ const AdminDashboardPage = () => {
               <div>
                 <p className="text-sm font-medium text-foreground mb-2">AI Integration</p>
                 <div className="flex flex-wrap gap-2">
-                  {['Lovable AI Gateway', 'Gemini 2.5 Flash', 'Vision/OCR'].map((tech) => (
+                  {['Gemini 2.5 Flash', 'Vision/OCR', 'Google AI API'].map((tech) => (
                     <span key={tech} className="text-xs bg-success/10 text-success px-2 py-1 rounded">
                       {tech}
                     </span>

@@ -10,7 +10,7 @@ import { supabase } from '@/integrations/supabase/client';
 
 const KitchenDisplayPage = () => {
   const navigate = useNavigate();
-  const { orders, updateOrderStatus, getActiveOrders, fetchOrders, setOrders } = useOrderStore();
+  const { updateOrderStatus, getActiveOrders, fetchOrders, setOrders } = useOrderStore();
   const activeOrders = getActiveOrders();
   const prevOrderCountRef = useRef(activeOrders.length);
 
@@ -28,8 +28,6 @@ const KitchenDisplayPage = () => {
           table: 'orders',
         },
         (payload) => {
-          console.log('Realtime update:', payload);
-          
           if (payload.eventType === 'INSERT') {
             const newOrder: Order = {
               id: payload.new.id,
@@ -43,14 +41,11 @@ const KitchenDisplayPage = () => {
               status: payload.new.status as OrderStatus,
               createdAt: new Date(payload.new.created_at),
             };
-            
-            setOrders([newOrder, ...orders]);
+            setOrders((prev) => [newOrder, ...prev]);
           } else if (payload.eventType === 'UPDATE') {
-            setOrders(
-              orders.map((order) =>
-                order.id === payload.new.id
-                  ? { ...order, status: payload.new.status as OrderStatus }
-                  : order
+            setOrders((prev) =>
+              prev.map((o) =>
+                o.id === payload.new.id ? { ...o, status: payload.new.status as OrderStatus } : o
               )
             );
           }

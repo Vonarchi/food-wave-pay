@@ -1,14 +1,114 @@
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Camera, Upload, ArrowLeft, Trash2, Check, Loader2, ImageIcon, Plus, Edit2, Image as ImageIconLucide, QrCode, Download, Settings2 } from 'lucide-react';
+import { Camera, Upload, ArrowLeft, Trash2, Check, Loader2, ImageIcon, Plus, Edit2, Image as ImageIconLucide, QrCode, Download, Settings2, LogOut, CreditCard } from 'lucide-react';
 import { toast } from 'sonner';
 import { QRCodeSVG } from 'qrcode.react';
 import { ModifierEditor } from '@/components/admin/ModifierEditor';
 import { BrandingSettings } from '@/components/admin/BrandingSettings';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { ModifierGroup } from '@/types';
+
+const CATEGORY_OPTIONS = ['Appetizers', 'Mains', 'Sides', 'Drinks', 'Desserts', 'Specials', 'Main'];
+
+function EditItemDialog({
+  item,
+  onClose,
+  onSave,
+}: {
+  item: { id: string; name: string; description: string | null; price: number; category: string; is_available: boolean };
+  onClose: () => void;
+  onSave: (u: { name?: string; description?: string; price?: number; category?: string; is_available?: boolean }) => Promise<void>;
+}) {
+  const [name, setName] = useState(item.name);
+  const [description, setDescription] = useState(item.description || '');
+  const [price, setPrice] = useState(item.price);
+  const [category, setCategory] = useState(item.category);
+  const [isAvailable, setIsAvailable] = useState(item.is_available);
+  const [saving, setSaving] = useState(false);
+
+  return (
+    <Dialog open onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>Edit Menu Item</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-4 pt-2">
+          <div>
+            <label className="block text-sm font-medium mb-2">Name</label>
+            <input
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              className="w-full p-3 rounded-lg border border-border bg-background text-foreground"
+              placeholder="Item name"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium mb-2">Description</label>
+            <textarea
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              className="w-full p-3 rounded-lg border border-border bg-background text-foreground min-h-[80px]"
+              placeholder="Optional"
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium mb-2">Price ($)</label>
+              <input
+                type="number"
+                step="0.01"
+                min="0"
+                value={price}
+                onChange={(e) => setPrice(parseFloat(e.target.value) || 0)}
+                className="w-full p-3 rounded-lg border border-border bg-background text-foreground"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium mb-2">Category</label>
+              <select
+                value={category}
+                onChange={(e) => setCategory(e.target.value)}
+                className="w-full p-3 rounded-lg border border-border bg-background text-foreground"
+              >
+                {CATEGORY_OPTIONS.map((c) => (
+                  <option key={c} value={c}>{c}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <input
+              type="checkbox"
+              id="available"
+              checked={isAvailable}
+              onChange={(e) => setIsAvailable(e.target.checked)}
+            />
+            <label htmlFor="available" className="text-sm">Available</label>
+          </div>
+          <div className="flex gap-2 pt-4">
+            <Button variant="outline" onClick={onClose} className="flex-1">Cancel</Button>
+            <Button
+              variant="cart"
+              className="flex-1"
+              disabled={!name.trim() || saving}
+              onClick={async () => {
+                setSaving(true);
+                await onSave({ name: name.trim(), description: description || null, price, category, is_available: isAvailable });
+                setSaving(false);
+              }}
+            >
+              {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Save'}
+            </Button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
 
 interface ExtractedItem {
   name: string;
@@ -20,9 +120,10 @@ interface ExtractedItem {
 
 const AdminPage = () => {
   const navigate = useNavigate();
+  const { user, signOut } = useAuth();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
-  
+
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [extractedItems, setExtractedItems] = useState<ExtractedItem[]>([]);
@@ -166,23 +267,56 @@ const AdminPage = () => {
   interface DbMenuItem {
     id: string;
     name: string;
+    description: string | null;
     price: number;
     category: string;
     image_url: string | null;
+    is_available: boolean;
     modifiers: unknown;
   }
   const [existingItems, setExistingItems] = useState<DbMenuItem[]>([]);
   const [loadingExisting, setLoadingExisting] = useState(false);
   const [uploadingItemId, setUploadingItemId] = useState<string | null>(null);
   const [editingModifiersItem, setEditingModifiersItem] = useState<DbMenuItem | null>(null);
+  const [editingItem, setEditingItem] = useState<DbMenuItem | null>(null);
+  const [deletingItemId, setDeletingItemId] = useState<string | null>(null);
   const itemImageInputRef = useRef<HTMLInputElement>(null);
+
+  // Load owner's restaurant slug when logged in
+  useEffect(() => {
+    if (!user) return;
+    const loadOwnerTruck = async () => {
+      const { data } = await supabase
+        .from('food_trucks')
+        .select('slug')
+        .eq('owner_id', user.id)
+        .limit(1)
+        .maybeSingle();
+      if (data?.slug) setTruckId(data.slug);
+    };
+    loadOwnerTruck();
+  }, [user?.id]);
+
+  const [truckBranding, setTruckBranding] = useState<{ logo_url?: string; accent_color?: string }>({});
+
+  useEffect(() => {
+    const fetchTruck = async () => {
+      const { data } = await supabase
+        .from('food_trucks')
+        .select('logo_url, accent_color')
+        .eq('slug', truckId)
+        .maybeSingle();
+      setTruckBranding({ logo_url: (data as any)?.logo_url, accent_color: (data as any)?.accent_color });
+    };
+    fetchTruck();
+  }, [truckId]);
 
   useEffect(() => {
     const fetchExisting = async () => {
       setLoadingExisting(true);
       const { data } = await supabase
         .from('menu_items')
-        .select('id, name, price, category, image_url, modifiers')
+        .select('id, name, description, price, category, image_url, is_available, modifiers')
         .eq('truck_id', truckId)
         .order('category')
         .order('name');
@@ -234,18 +368,40 @@ const AdminPage = () => {
     <div className="min-h-screen bg-background">
       {/* Header */}
       <header className="sticky top-0 bg-foreground text-background p-4 z-30">
-        <div className="flex items-center gap-4 max-w-4xl mx-auto">
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => navigate('/')}
-            className="text-background hover:bg-background/10"
-          >
-            <ArrowLeft className="w-5 h-5" />
-          </Button>
-          <div>
-            <h1 className="text-xl font-bold">Menu Admin</h1>
-            <p className="text-background/70 text-sm">Capture menu from image</p>
+        <div className="flex items-center justify-between max-w-4xl mx-auto">
+          <div className="flex items-center gap-4">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => navigate('/')}
+              className="text-background hover:bg-background/10"
+            >
+              <ArrowLeft className="w-5 h-5" />
+            </Button>
+            <div>
+              <h1 className="text-xl font-bold">Menu Admin</h1>
+              <p className="text-background/70 text-sm">Capture menu from image</p>
+            </div>
+          </div>
+          <div className="flex gap-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => navigate('/admin/billing')}
+              className="text-background hover:bg-background/10"
+            >
+              <CreditCard className="w-4 h-4 mr-1" />
+              Billing
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => signOut().then(() => navigate('/'))}
+              className="text-background hover:bg-background/10"
+            >
+              <LogOut className="w-4 h-4 mr-1" />
+              Logout
+            </Button>
           </div>
         </div>
       </header>
@@ -272,9 +428,9 @@ const AdminPage = () => {
         {/* Branding Settings */}
         <BrandingSettings
           truckId={truckId}
-          onUpdate={(updates) => {
-            console.log('Branding updated:', updates);
-          }}
+          currentLogoUrl={truckBranding.logo_url}
+          currentAccentColor={truckBranding.accent_color}
+          onUpdate={(updates) => setTruckBranding((p) => ({ ...p, ...updates }))}
         />
 
         {/* Image Capture Section */}
@@ -540,7 +696,15 @@ const AdminPage = () => {
                       )}
                     </p>
                   </div>
-                  <div className="flex gap-1 shrink-0">
+                  <div className="flex flex-wrap gap-1 shrink-0">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setEditingItem(item)}
+                    >
+                      <Edit2 className="w-3 h-3 mr-1" />
+                      Edit
+                    </Button>
                     <Button
                       variant="outline"
                       size="sm"
@@ -559,6 +723,41 @@ const AdminPage = () => {
                     >
                       <Upload className="w-3 h-3 mr-1" />
                       {item.image_url ? 'Change' : 'Add'} Photo
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="text-destructive hover:bg-destructive/10"
+                      onClick={async () => {
+                        if (!confirm(`Delete "${item.name}"?`)) return;
+                        setDeletingItemId(item.id);
+                        const { error } = await supabase.from('menu_items').delete().eq('id', item.id);
+                        setDeletingItemId(null);
+                        if (error) toast.error('Failed to delete');
+                        else {
+                          setExistingItems((prev) => prev.filter((i) => i.id !== item.id));
+                          toast.success('Item deleted');
+                        }
+                      }}
+                      disabled={deletingItemId === item.id}
+                    >
+                      <Trash2 className="w-3 h-3" />
+                    </Button>
+                    <Button
+                      variant={item.is_available ? 'outline' : 'secondary'}
+                      size="sm"
+                      onClick={async () => {
+                        const { error } = await supabase
+                          .from('menu_items')
+                          .update({ is_available: !item.is_available })
+                          .eq('id', item.id);
+                        if (error) toast.error('Failed to update');
+                        else setExistingItems((prev) =>
+                          prev.map((i) => i.id === item.id ? { ...i, is_available: !i.is_available } : i)
+                        );
+                      }}
+                    >
+                      {item.is_available ? 'Available' : 'Unavailable'}
                     </Button>
                   </div>
                 </div>
@@ -631,6 +830,28 @@ const AdminPage = () => {
           </div>
         </motion.section>
       </div>
+
+      {/* Edit Item Modal */}
+      {editingItem && (
+        <EditItemDialog
+          item={editingItem}
+          onClose={() => setEditingItem(null)}
+          onSave={async (updates) => {
+            const { error } = await supabase
+              .from('menu_items')
+              .update(updates)
+              .eq('id', editingItem.id);
+            if (error) toast.error('Failed to update');
+            else {
+              setExistingItems((prev) =>
+                prev.map((i) => i.id === editingItem.id ? { ...i, ...updates } : i)
+              );
+              toast.success('Item updated');
+              setEditingItem(null);
+            }
+          }}
+        />
+      )}
 
       {/* Modifier Editor Modal */}
       <AnimatePresence>

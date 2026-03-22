@@ -80,10 +80,10 @@ const Index = () => {
                 variant="outline"
                 size="xl"
                 className="border-2 border-primary-foreground/30 bg-transparent text-primary-foreground hover:bg-primary-foreground/10"
-                onClick={() => navigate('/admin')}
+                onClick={() => navigate('/login')}
               >
                 <Settings className="w-5 h-5 mr-2" />
-                Menu Admin
+                Restaurant Login
               </Button>
               <Button
                 variant="outline"

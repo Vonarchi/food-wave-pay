@@ -1,18 +1,86 @@
+import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useOrderStore } from '@/store/useStore';
+import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { motion } from 'framer-motion';
-import { CheckCircle, Clock, ChefHat, ArrowLeft } from 'lucide-react';
+import { CheckCircle, Clock, ChefHat, ArrowLeft, Loader2 } from 'lucide-react';
 import { ORDER_STATUS_LABELS } from '@/types';
+import { Order, CartItem, OrderStatus } from '@/types';
+
+const mapDbRowToOrder = (row: {
+  id: string;
+  order_number: string;
+  truck_id: string;
+  customer_name: string | null;
+  items: unknown;
+  subtotal: number;
+  tax: number;
+  total: number;
+  status: string;
+  created_at: string;
+}): Order => ({
+  id: row.id,
+  orderNumber: parseInt(row.order_number, 10),
+  truckId: row.truck_id,
+  customerName: row.customer_name || undefined,
+  items: row.items as CartItem[],
+  subtotal: parseFloat(String(row.subtotal)),
+  tax: parseFloat(String(row.tax)),
+  total: parseFloat(String(row.total)),
+  status: row.status as OrderStatus,
+  createdAt: new Date(row.created_at),
+});
 
 const ConfirmationPage = () => {
   const { orderId } = useParams<{ orderId: string }>();
   const navigate = useNavigate();
-  const order = useOrderStore((state) =>
+  const orderFromStore = useOrderStore((state) =>
     state.orders.find((o) => o.id === orderId)
   );
+  const [fetchedOrder, setFetchedOrder] = useState<Order | null>(null);
+  const [loading, setLoading] = useState(!orderFromStore);
+  const [notFound, setNotFound] = useState(false);
 
-  if (!order) {
+  // Fetch order by ID when not in store (e.g. after refresh)
+  useEffect(() => {
+    if (orderFromStore) {
+      setFetchedOrder(null);
+      setLoading(false);
+      return;
+    }
+    if (!orderId) {
+      setLoading(false);
+      setNotFound(true);
+      return;
+    }
+    const fetchOrder = async () => {
+      const { data, error } = await supabase
+        .from('orders')
+        .select('*')
+        .eq('id', orderId)
+        .single();
+      if (error || !data) {
+        setNotFound(true);
+      } else {
+        setFetchedOrder(mapDbRowToOrder(data as Parameters<typeof mapDbRowToOrder>[0]));
+      }
+      setLoading(false);
+    };
+    fetchOrder();
+  }, [orderId, orderFromStore]);
+
+  const order = orderFromStore ?? fetchedOrder;
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center p-4">
+        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  if (notFound || !order) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center p-4">
         <div className="text-center">

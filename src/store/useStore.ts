@@ -83,9 +83,9 @@ export const useCartStore = create<CartState>((set, get) => ({
   getItemCount: () => get().items.reduce((count, item) => count + item.quantity, 0),
 }));
 
-// Helper to generate order number
+// Helper to generate order number (timestamp-based for uniqueness)
 const generateOrderNumber = (): string => {
-  return Math.floor(100 + Math.random() * 900).toString();
+  return Date.now().toString().slice(-8);
 };
 
 // Helper to map database row to Order type

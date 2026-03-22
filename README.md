@@ -1,73 +1,93 @@
-# Welcome to your Lovable project
+# Food Wave Pay
 
-## Project info
+QR-powered mobile ordering for food trucks. Scan, order, and pay – orders go straight to the kitchen.
 
-**URL**: https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID
+## Tech Stack
 
-## How can I edit this code?
+- **Frontend**: React, TypeScript, Vite, Tailwind CSS, shadcn/ui
+- **Backend**: Supabase (PostgreSQL, Realtime, Edge Functions)
+- **AI**: Google Gemini API (menu extraction from images)
 
-There are several ways of editing your application.
+## Local Development
 
-**Use Lovable**
+```bash
+# Install dependencies
+npm install
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and start prompting.
-
-Changes made via Lovable will be committed automatically to this repo.
-
-**Use your preferred IDE**
-
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
-
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
-
-Follow these steps:
-
-```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
-
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
-
-# Step 3: Install the necessary dependencies.
-npm i
-
-# Step 4: Start the development server with auto-reloading and an instant preview.
+# Start dev server
 npm run dev
 ```
 
-**Edit a file directly in GitHub**
+Create a `.env` file with your Supabase credentials (see `.env.example` if available).
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+## Deploy to Vercel
 
-**Use GitHub Codespaces**
+### 1. Push to GitHub
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
+```bash
+git init
+git add .
+git commit -m "Initial commit"
+git remote add origin https://github.com/YOUR_USERNAME/food-wave-pay.git
+git push -u origin main
+```
 
-## What technologies are used for this project?
+### 2. Connect to Vercel
 
-This project is built with:
+1. Go to [vercel.com](https://vercel.com) and sign in
+2. Click **Add New** → **Project**
+3. Import your GitHub repo
+4. Configure:
+   - **Framework Preset**: Vite
+   - **Root Directory**: `./` (or leave default)
+   - **Build Command**: `npm run build`
+   - **Output Directory**: `dist`
 
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
+### 3. Environment Variables
 
-## How can I deploy this project?
+Add these in Vercel Project Settings → Environment Variables:
 
-Simply open [Lovable](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and click on Share -> Publish.
+| Variable | Description |
+|----------|-------------|
+| `VITE_SUPABASE_URL` | Your Supabase project URL |
+| `VITE_SUPABASE_PUBLISHABLE_KEY` | Supabase anon/public key |
 
-## Can I connect a custom domain to my Lovable project?
+### 4. Deploy
 
-Yes, you can!
+Click **Deploy**. Vercel will build and publish your app.
 
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
+## Supabase Edge Functions (AI Menu Extraction)
 
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/features/custom-domain#custom-domain)
+The `extract-menu` function runs on Supabase, not Vercel. Deploy it separately:
+
+```bash
+# Install Supabase CLI: https://supabase.com/docs/guides/cli
+supabase login
+supabase link --project-ref YOUR_PROJECT_REF
+
+# Set secret for Gemini API
+supabase secrets set GOOGLE_GEMINI_API_KEY=your_google_ai_api_key
+
+# Deploy the function
+supabase functions deploy extract-menu
+```
+
+Get a free API key at [Google AI Studio](https://aistudio.google.com/apikey).
+
+## Icons & Branding
+
+Replace these files with your own branding before deploy:
+
+- `public/favicon.ico` – Browser tab icon (replace if using a template favicon)
+- `public/icon-192.png` – PWA icon (192×192)
+- `public/icon-512.png` – PWA icon (512×512)
+
+Generate from a source image:
+
+```bash
+# Using ImageMagick (if installed)
+convert favicon.ico -resize 192x192 public/icon-192.png
+convert favicon.ico -resize 512x512 public/icon-512.png
+```
+
+Update `index.html` og:image and twitter:image to full URLs after deploy (e.g. `https://yourdomain.com/icon-512.png`).

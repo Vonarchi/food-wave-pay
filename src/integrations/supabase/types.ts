@@ -14,6 +14,36 @@ export type Database = {
   }
   public: {
     Tables: {
+      profiles: {
+        Row: {
+          id: string
+          email: string | null
+          full_name: string | null
+          phone: string | null
+          restaurant_name: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id: string
+          email?: string | null
+          full_name?: string | null
+          phone?: string | null
+          restaurant_name?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          email?: string | null
+          full_name?: string | null
+          phone?: string | null
+          restaurant_name?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       customers: {
         Row: {
           created_at: string
@@ -60,6 +90,7 @@ export type Database = {
           logo_url: string | null
           name: string
           slug: string
+          owner_id: string | null
           updated_at: string
         }
         Insert: {
@@ -74,6 +105,7 @@ export type Database = {
           logo_url?: string | null
           name: string
           slug: string
+          owner_id?: string | null
           updated_at?: string
         }
         Update: {
@@ -88,6 +120,7 @@ export type Database = {
           logo_url?: string | null
           name?: string
           slug?: string
+          owner_id?: string | null
           updated_at?: string
         }
         Relationships: []

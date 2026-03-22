@@ -1,11 +1,11 @@
 {
-  "name": "Smackin Jacks - Food Truck Ordering",
-  "short_name": "Smackin Jacks",
-  "description": "Order food from Smackin Jacks instantly",
+  "name": "KICKITCHEN - Food Truck Ordering",
+  "short_name": "KICKITCHEN",
+  "description": "Order food from KICKITCHEN instantly",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#FDF8F4",
-  "theme_color": "#F3310A",
+  "theme_color": "#000000",
   "orientation": "portrait-primary",
   "icons": [
     {

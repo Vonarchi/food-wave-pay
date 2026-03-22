@@ -1,0 +1,54 @@
+# Supabase Edge Functions
+
+## extract-menu
+
+Extracts menu items from a menu image using Google Gemini AI.
+
+**Env:** `GOOGLE_GEMINI_API_KEY` (Supabase secrets)
+
+**Deploy:**
+```bash
+supabase secrets set GOOGLE_GEMINI_API_KEY=your_key
+supabase functions deploy extract-menu
+```
+
+**Request:** `POST` with `{ "imageUrl": "https://..." }` (public URL of uploaded menu image)
+
+---
+
+## stripe-webhook
+
+Handles Stripe webhook events for subscription lifecycle.
+
+**Env:** `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`
+
+**Deploy:**
+```bash
+supabase secrets set STRIPE_SECRET_KEY=sk_...
+supabase secrets set STRIPE_WEBHOOK_SECRET=whsec_...
+supabase functions deploy stripe-webhook --no-verify-jwt
+```
+
+**Stripe Dashboard:** Add webhook endpoint `https://<project>.supabase.co/functions/v1/stripe-webhook`  
+Events: `checkout.session.completed`, `customer.subscription.updated`, `customer.subscription.deleted`
+
+---
+
+## create-checkout-session
+
+Creates a Stripe Checkout Session for subscription. Requires auth.
+
+**Env:** `STRIPE_SECRET_KEY`, `STRIPE_PRICE_ID`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `SITE_URL` (optional)
+
+**Deploy:**
+```bash
+supabase secrets set STRIPE_SECRET_KEY=sk_...
+supabase secrets set STRIPE_PRICE_ID=price_...   # Your monthly plan price ID
+supabase secrets set SITE_URL=https://your-app.vercel.app
+supabase functions deploy create-checkout-session
+```
+
+**Request:** `POST` with `Authorization: Bearer <supabase_access_token>`  
+Optional body: `{ "returnUrl": "https://your-app.com" }`
+
+**Response:** `{ "url": "https://checkout.stripe.com/..." }`

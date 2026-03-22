@@ -1,16 +1,65 @@
-import { useNavigate } from 'react-router-dom';
+import { useState, useEffect } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useAuth } from '@/contexts/AuthContext';
+import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
-import { CreditCard, ArrowLeft } from 'lucide-react';
+import { CreditCard, ArrowLeft, Loader2, CheckCircle } from 'lucide-react';
+import { toast } from 'sonner';
 
-/**
- * TODO: Connect Stripe for subscription management.
- * - Create Stripe Customer on restaurant signup
- * - Create Checkout Session for monthly plan
- * - Webhook to update subscription status
- * - Stripe Customer Portal for managing billing
- */
 const BillingPage = () => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const { user } = useAuth();
+  const [subscriptionStatus, setSubscriptionStatus] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [checkoutLoading, setCheckoutLoading] = useState(false);
+
+  useEffect(() => {
+    if (searchParams.get('success') === 'true') {
+      toast.success('Subscription activated!');
+      window.history.replaceState({}, '', '/admin/billing');
+    }
+  }, [searchParams]);
+
+  useEffect(() => {
+    const fetchProfile = async () => {
+      if (!user) return;
+      const { data } = await supabase
+        .from('profiles')
+        .select('subscription_status')
+        .eq('id', user.id)
+        .single();
+      setSubscriptionStatus(data?.subscription_status || 'inactive');
+      setLoading(false);
+    };
+    fetchProfile();
+  }, [user?.id]);
+
+  const handleSubscribe = async () => {
+    setCheckoutLoading(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) {
+        toast.error('Please sign in again');
+        return;
+      }
+      const returnUrl = window.location.origin;
+      const { data, error } = await supabase.functions.invoke('create-checkout-session', {
+        body: { returnUrl },
+        headers: { Authorization: `Bearer ${session.access_token}` },
+      });
+      if (error) throw error;
+      if (data?.url) {
+        window.location.href = data.url;
+      } else {
+        toast.error('Checkout not configured. Add STRIPE_PRICE_ID to Supabase secrets.');
+      }
+    } catch (err) {
+      console.error(err);
+      toast.error(err instanceof Error ? err.message : 'Failed to start checkout');
+      setCheckoutLoading(false);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-background">
@@ -29,18 +78,44 @@ const BillingPage = () => {
             <CreditCard className="w-8 h-8 text-primary" />
             <h2 className="text-lg font-semibold">Subscription Status</h2>
           </div>
-          <p className="text-muted-foreground text-sm mb-4">
-            Stripe integration coming soon. You can use the app during the launch period.
-          </p>
-          <div className="p-4 rounded-lg bg-muted/50 text-sm">
-            <p className="font-medium text-foreground mb-2">To add Stripe:</p>
-            <ol className="list-decimal list-inside space-y-1 text-muted-foreground">
-              <li>Create Stripe account and get API keys</li>
-              <li>Add VITE_STRIPE_PUBLISHABLE_KEY to env</li>
-              <li>Create a monthly product in Stripe Dashboard</li>
-              <li>Implement checkout flow and webhook</li>
-            </ol>
-          </div>
+
+          {loading ? (
+            <div className="flex items-center gap-2 text-muted-foreground">
+              <Loader2 className="w-5 h-5 animate-spin" />
+              Loading...
+            </div>
+          ) : subscriptionStatus === 'active' ? (
+            <div className="space-y-4">
+              <div className="flex items-center gap-2 text-success">
+                <CheckCircle className="w-5 h-5" />
+                <span className="font-medium">Active</span>
+              </div>
+              <p className="text-sm text-muted-foreground">
+                Your subscription is active. Manage billing in Stripe Customer Portal (coming soon).
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <p className="text-muted-foreground text-sm">
+                Subscribe to unlock full access and support development.
+              </p>
+              <Button
+                variant="cart"
+                size="lg"
+                onClick={handleSubscribe}
+                disabled={checkoutLoading}
+              >
+                {checkoutLoading ? (
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                ) : (
+                  'Subscribe Now'
+                )}
+              </Button>
+              <p className="text-xs text-muted-foreground">
+                If Subscribe does nothing, ensure STRIPE_PRICE_ID is set in Supabase Edge Function secrets.
+              </p>
+            </div>
+          )}
         </div>
       </div>
     </div>

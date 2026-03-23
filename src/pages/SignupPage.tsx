@@ -3,16 +3,17 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { motion } from 'framer-motion';
-import { Store, Loader2 } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 
 const SignupPage = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const { signUp, error, clearError, loading } = useAuth();
+  const { signUp, error, clearError } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [fullName, setFullName] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   // Capture referral params from URL (future partner tracking)
   const referralCode = searchParams.get('ref') || searchParams.get('referral_code') || undefined;
@@ -22,17 +23,24 @@ const SignupPage = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     clearError();
+    setSuccessMessage(null);
     setIsSubmitting(true);
-    const { error } = await signUp(email, password, {
-      fullName: fullName || undefined,
-      referralCode,
-      referredBy,
-      partnerId,
-    });
-    setIsSubmitting(false);
-    if (!error) {
-      // TODO: Store referral_code, referred_by, partner_id in profile after signup
-      navigate('/onboarding');
+    try {
+      const { error, needsEmailConfirmation } = await signUp(email, password, {
+        fullName: fullName || undefined,
+        referralCode,
+        referredBy,
+        partnerId,
+      });
+      if (!error) {
+        if (needsEmailConfirmation) {
+          setSuccessMessage('Check your email to confirm your account, then sign in to continue onboarding.');
+          return;
+        }
+        navigate('/onboarding');
+      }
+    } finally {
+      setIsSubmitting(false); // Always stop spinner
     }
   };
 
@@ -45,14 +53,18 @@ const SignupPage = () => {
       >
         <div className="bg-card rounded-2xl border border-border p-8 shadow-lg">
           <div className="text-center mb-8">
-            <div className="w-14 h-14 bg-primary rounded-2xl flex items-center justify-center mx-auto mb-4">
-              <Store className="w-8 h-8 text-primary-foreground" />
-            </div>
+            <img
+              src="/logo.png"
+              alt="KICKITCHEN"
+              className="h-14 w-auto mx-auto mb-4 object-contain"
+              width={56}
+              height={56}
+            />
             <h1 className="text-2xl font-bold text-foreground">Create Account</h1>
             <p className="text-muted-foreground mt-1">Start your restaurant ordering setup</p>
           </div>
 
-          <form onSubmit={handleSubmit} className="space-y-4">
+          <form onSubmit={handleSubmit} className="space-y-4" autoComplete="off">
             <div>
               <label className="block text-sm font-medium text-foreground mb-2">Full Name</label>
               <input
@@ -60,7 +72,7 @@ const SignupPage = () => {
                 value={fullName}
                 onChange={(e) => setFullName(e.target.value)}
                 placeholder="Your name"
-                autoComplete="name"
+                autoComplete="off"
                 className="w-full p-3 rounded-lg border border-border bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
               />
             </div>
@@ -72,7 +84,7 @@ const SignupPage = () => {
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="you@restaurant.com"
                 required
-                autoComplete="email"
+                autoComplete="off"
                 className="w-full p-3 rounded-lg border border-border bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
               />
             </div>
@@ -96,15 +108,24 @@ const SignupPage = () => {
               </div>
             )}
 
+            {successMessage && (
+              <div className="p-3 rounded-lg bg-primary/10 text-sm text-foreground">
+                {successMessage}
+              </div>
+            )}
+
             <Button
               type="submit"
               variant="cart"
               size="lg"
               className="w-full"
-              disabled={loading || isSubmitting}
+              disabled={isSubmitting}
             >
-              {isSubmitting || loading ? (
-                <Loader2 className="w-5 h-5 animate-spin" />
+              {isSubmitting ? (
+                <>
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                  Creating account...
+                </>
               ) : (
                 'Create Account'
               )}

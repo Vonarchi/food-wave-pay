@@ -2,6 +2,8 @@ import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
+import { formatEdgeFunctionFailure } from '@/lib/edgeFunctionErrors';
+import { mapApiModifiersToApp, normalizeExtractionPayload } from '@/lib/menuExtraction';
 import { Button } from '@/components/ui/button';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Camera, Upload, ArrowLeft, Trash2, Check, Loader2, ImageIcon, Plus, Edit2, Image as ImageIconLucide, QrCode, Download, Settings2, LogOut, CreditCard } from 'lucide-react';
@@ -10,7 +12,7 @@ import { QRCodeSVG } from 'qrcode.react';
 import { ModifierEditor } from '@/components/admin/ModifierEditor';
 import { BrandingSettings } from '@/components/admin/BrandingSettings';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { ModifierGroup } from '@/types';
+import type { ModifierGroup } from '@/types';
 
 const CATEGORY_OPTIONS = ['Appetizers', 'Mains', 'Sides', 'Drinks', 'Desserts', 'Specials', 'Main'];
 
@@ -110,13 +112,18 @@ function EditItemDialog({
   );
 }
 
+/** Draft row after AI extraction (owner can edit before save) */
 interface ExtractedItem {
   name: string;
   description?: string;
   price: number;
   category: string;
   selected?: boolean;
+  /** Draft modifiers mapped for menu_items.modifiers JSONB */
+  modifiers?: ModifierGroup[];
 }
+
+const EXTRACTION_TIMEOUT_MS = 90_000;
 
 const AdminPage = () => {
   const navigate = useNavigate();
@@ -134,6 +141,8 @@ const AdminPage = () => {
     const file = event.target.files?.[0];
     if (!file) return;
 
+    console.info('[kiokitchen:extract] Image selected:', file.name, `${Math.round(file.size / 1024)}KB`);
+
     // Create preview
     const reader = new FileReader();
     reader.onload = (e) => {
@@ -149,50 +158,88 @@ const AdminPage = () => {
     setIsProcessing(true);
     setExtractedItems([]);
 
+    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
     try {
-      // Upload image to Supabase storage
+      console.info(
+        '[kiokitchen:extract] Supabase project host:',
+        supabaseUrl ? new URL(supabaseUrl).hostname : '(VITE_SUPABASE_URL missing — deploy will fail)'
+      );
+    } catch {
+      console.warn('[kiokitchen:extract] Invalid VITE_SUPABASE_URL');
+    }
+
+    try {
+      console.info('[kiokitchen:extract] Storage upload started → bucket menu-images');
       const fileName = `menu-${Date.now()}.${file.name.split('.').pop()}`;
-      const { data: uploadData, error: uploadError } = await supabase.storage
-        .from('menu-images')
-        .upload(fileName, file);
-
-      if (uploadError) {
-        throw new Error(`Upload failed: ${uploadError.message}`);
-      }
-
-      // Get public URL
-      const { data: urlData } = supabase.storage
-        .from('menu-images')
-        .getPublicUrl(fileName);
-
-      const imageUrl = urlData.publicUrl;
-      console.log('Image uploaded:', imageUrl);
-
-      // Call edge function to extract menu items
-      const { data, error } = await supabase.functions.invoke('extract-menu', {
-        body: { imageUrl },
+      const { error: uploadError } = await supabase.storage.from('menu-images').upload(fileName, file, {
+        cacheControl: '3600',
+        upsert: false,
       });
 
+      if (uploadError) {
+        console.error('[kiokitchen:extract] Upload failed:', uploadError);
+        throw new Error(`Upload failed: ${uploadError.message}`);
+      }
+      console.info('[kiokitchen:extract] Upload succeeded:', fileName);
+
+      const { data: urlData } = supabase.storage.from('menu-images').getPublicUrl(fileName);
+      const imageUrl = urlData.publicUrl;
+      console.info('[kiokitchen:extract] Public imageUrl:', imageUrl);
+
+      const invokePromise = supabase.functions.invoke('extract-menu', { body: { imageUrl } });
+      const timeoutPromise = new Promise<never>((_, reject) =>
+        setTimeout(
+          () => reject(new Error(`Extraction timed out after ${EXTRACTION_TIMEOUT_MS / 1000} seconds`)),
+          EXTRACTION_TIMEOUT_MS
+        )
+      );
+
+      console.info('[kiokitchen:extract] Invoking edge function extract-menu…');
+      const { data, error } = await Promise.race([invokePromise, timeoutPromise]);
+      console.info(
+        '[kiokitchen:extract] extract-menu response received:',
+        error ? `error: ${error.message}` : `ok, raw items=${Array.isArray(data?.items) ? data.items.length : 0}`
+      );
+
       if (error) {
-        throw new Error(`Extraction failed: ${error.message}`);
+        const detail = await formatEdgeFunctionFailure(error);
+        console.error('[kiokitchen:extract] Extraction failed:', detail);
+        throw new Error(`Extraction failed: ${detail}`);
       }
 
-      if (data.items && data.items.length > 0) {
-        // Mark all items as selected by default
-        const itemsWithSelection = data.items.map((item: ExtractedItem) => ({
-          ...item,
-          selected: true,
-        }));
+      if (data?.error) {
+        throw new Error(typeof data.error === 'string' ? data.error : JSON.stringify(data.error));
+      }
+
+      const drafts = normalizeExtractionPayload(data?.items);
+      const itemsWithSelection: ExtractedItem[] = drafts.map((d) => ({
+        name: d.name,
+        description: d.description || '',
+        price: d.price,
+        category: d.category,
+        modifiers: mapApiModifiersToApp(d.modifier_groups),
+        selected: true,
+      }));
+
+      if (itemsWithSelection.length > 0) {
         setExtractedItems(itemsWithSelection);
-        toast.success(`Found ${data.items.length} menu items!`);
+        const withMods = itemsWithSelection.filter((i) => (i.modifiers?.length ?? 0) > 0).length;
+        toast.success(
+          withMods > 0
+            ? `Draft ready: ${itemsWithSelection.length} items (${withMods} with add-on groups — review below).`
+            : `Draft ready: ${itemsWithSelection.length} items. Review and edit before saving.`
+        );
       } else {
-        toast.error('No menu items could be extracted. Try a clearer image.');
+        console.warn('[kiokitchen:extract] No items after normalization');
+        toast.error('No menu items could be extracted. Try a clearer, well-lit photo.');
       }
     } catch (error) {
-      console.error('Error:', error);
-      toast.error(error instanceof Error ? error.message : 'Failed to process menu');
+      console.error('[kiokitchen:extract] Pipeline error:', error);
+      const msg = error instanceof Error ? error.message : 'Failed to process menu';
+      toast.error(msg);
     } finally {
       setIsProcessing(false);
+      console.info('[kiokitchen:extract] Loading state cleared (finally)');
     }
   };
 
@@ -206,9 +253,7 @@ const AdminPage = () => {
 
   const updateItem = (index: number, field: keyof ExtractedItem, value: string | number) => {
     setExtractedItems((items) =>
-      items.map((item, i) =>
-        i === index ? { ...item, [field]: value } : item
-      )
+      items.map((item, i) => (i === index ? { ...item, [field]: value } : item))
     );
   };
 
@@ -219,9 +264,13 @@ const AdminPage = () => {
   const addManualItem = () => {
     setExtractedItems((items) => [
       ...items,
-      { name: '', description: '', price: 0, category: 'Main', selected: true },
+      { name: '', description: '', price: 0, category: 'Main', modifiers: [], selected: true },
     ]);
   };
+
+  const categoryChoices = [
+    ...new Set([...CATEGORY_OPTIONS, ...extractedItems.map((i) => i.category).filter(Boolean)]),
+  ].sort((a, b) => a.localeCompare(b));
 
   const saveSelectedItems = async () => {
     const selectedItems = extractedItems.filter((item) => item.selected && item.name);
@@ -241,7 +290,7 @@ const AdminPage = () => {
         price: item.price,
         category: item.category,
         is_available: true,
-        modifiers: [],
+        modifiers: item.modifiers?.length ? item.modifiers : [],
       }));
 
       const { error } = await supabase.from('menu_items').insert(itemsToInsert);
@@ -592,16 +641,20 @@ const AdminPage = () => {
                                 <select
                                   value={item.category}
                                   onChange={(e) => updateItem(index, 'category', e.target.value)}
-                                  className="ml-auto text-xs bg-secondary px-2 py-1 rounded border border-border"
+                                  className="ml-auto text-xs bg-secondary px-2 py-1 rounded border border-border max-w-[140px]"
                                 >
-                                  <option value="Appetizers">Appetizers</option>
-                                  <option value="Mains">Mains</option>
-                                  <option value="Sides">Sides</option>
-                                  <option value="Drinks">Drinks</option>
-                                  <option value="Desserts">Desserts</option>
-                                  <option value="Specials">Specials</option>
+                                  {categoryChoices.map((c) => (
+                                    <option key={c} value={c}>
+                                      {c}
+                                    </option>
+                                  ))}
                                 </select>
                               </div>
+                              {(item.modifiers?.length ?? 0) > 0 && (
+                                <p className="text-xs text-muted-foreground">
+                                  {item.modifiers!.length} add-on group(s) from menu — refine under “Current menu” after save.
+                                </p>
+                              )}
                             </div>
 
                             <Button

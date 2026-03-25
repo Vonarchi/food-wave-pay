@@ -38,6 +38,22 @@ Get key from [Google AI Studio](https://aistudio.google.com/apikey)
 - Local: Create `.env` with `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY`
 - Vercel: Add same vars in Project Settings → Environment Variables
 
+### 4. Vercel Deployment — Joseph Miles Dyson Account Only
+
+**Important:** Deploy only from the **Joseph Miles Dyson** Vercel account. Do not deploy to James' Project.
+
+1. Log into [vercel.com](https://vercel.com) as **Joseph Miles Dyson**
+2. Import the GitHub repo or connect the existing project
+3. Ensure env vars are set (see above)
+4. Deployments will auto-run on push if the repo is connected
+
+To deploy via CLI, ensure you're logged in as Joseph Miles Dyson:
+```bash
+vercel whoami   # Verify account
+vercel link     # Link to project under Joseph's account
+vercel --prod   # Deploy
+```
+
 ## What’s Mocked / Placeholder
 
 - **Stripe**: Billing page is a placeholder. No checkout, webhooks, or subscription logic.

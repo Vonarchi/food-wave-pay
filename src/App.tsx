@@ -40,6 +40,7 @@ const App = () => (
           {/* Protected restaurant routes */}
           <Route path="/onboarding" element={<ProtectedRoute><OnboardingPage /></ProtectedRoute>} />
           <Route path="/kitchen" element={<ProtectedRoute><KitchenDisplayPage /></ProtectedRoute>} />
+          <Route path="/dashboard/kitchen" element={<ProtectedRoute><KitchenDisplayPage /></ProtectedRoute>} />
           <Route path="/admin" element={<ProtectedRoute><AdminPage /></ProtectedRoute>} />
           <Route path="/admin/dashboard" element={<ProtectedRoute><AdminDashboardPage /></ProtectedRoute>} />
           <Route path="/admin/billing" element={<ProtectedRoute><BillingPage /></ProtectedRoute>} />

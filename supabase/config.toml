@@ -1,4 +1,4 @@
-project_id = "shnpfvfkztjaaqlvlivn"
+project_id = "awryxczjacqrgjlctrjc"
 
 [functions.extract-menu]
 verify_jwt = false

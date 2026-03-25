@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { motion } from 'framer-motion';
 import { QrCode, Smartphone, ChefHat, Zap, CreditCard, Clock, Settings, LayoutDashboard, Store, ArrowRight, Loader2 } from 'lucide-react';
-import { supabase } from '@/integrations/supabase/client';
+import { SUPABASE_CONNECTIVITY_HINT, supabase } from '@/integrations/supabase/client';
 
 interface TruckListing {
   slug: string;
@@ -18,18 +18,56 @@ const Index = () => {
   const navigate = useNavigate();
   const [trucks, setTrucks] = useState<TruckListing[]>([]);
   const [trucksLoading, setTrucksLoading] = useState(true);
+  const [trucksError, setTrucksError] = useState<string | null>(null);
 
   useEffect(() => {
+    let active = true;
+
     const fetchTrucks = async () => {
-      const { data } = await supabase
-        .from('food_trucks')
-        .select('slug, name, description, logo_url, accent_color, location')
-        .eq('is_active', true)
-        .order('name');
-      setTrucks((data as TruckListing[]) || []);
-      setTrucksLoading(false);
+      setTrucksLoading(true);
+      setTrucksError(null);
+
+      const timeoutPromise = new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error('Request timed out')), 10000)
+      );
+
+      try {
+        const { data, error } = await Promise.race([
+          supabase
+            .from('food_trucks')
+            .select('slug, name, description, logo_url, accent_color, location')
+            .eq('is_active', true)
+            .order('name'),
+          timeoutPromise,
+        ]);
+
+        if (!active) return;
+
+        if (error) {
+          throw error;
+        }
+
+        setTrucks((data as TruckListing[]) || []);
+      } catch (error) {
+        if (!active) return;
+
+        const message = error instanceof Error ? error.message : 'Failed to load restaurants';
+        const isConnectivityIssue =
+          message.includes('fetch') || message.includes('Failed') || message.includes('timed out');
+
+        console.error('[index] Failed to load restaurants:', message);
+        setTrucks([]);
+        setTrucksError(isConnectivityIssue ? SUPABASE_CONNECTIVITY_HINT : message);
+      } finally {
+        if (active) setTrucksLoading(false);
+      }
     };
+
     fetchTrucks();
+
+    return () => {
+      active = false;
+    };
   }, []);
 
   return (
@@ -46,16 +84,26 @@ const Index = () => {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6 }}
           >
+            <div className="flex justify-center mb-6">
+              <img
+                src="/logo.png"
+                alt="KICKITCHEN"
+                className="h-16 md:h-20 w-auto object-contain max-w-[180px]"
+                width={160}
+                height={160}
+                decoding="async"
+              />
+            </div>
             <div className="inline-flex items-center gap-2 bg-primary/20 backdrop-blur-sm px-4 py-2 rounded-full text-primary-foreground/90 text-sm mb-6 border border-primary/30">
               <Zap className="w-4 h-4" />
               Turn Every Phone Into an Ordering Terminal
             </div>
             
             <h1 className="text-4xl md:text-6xl font-bold text-primary-foreground mb-6 leading-tight">
-              Smackin Jacks
+              KICKITCHEN
             </h1>
             <p className="text-xl md:text-2xl text-primary-foreground/80 mb-8 max-w-2xl mx-auto">
-              QR-powered mobile ordering for Smackin Jacks. Scan, order, and pay – orders go straight to the kitchen.
+              QR-powered mobile ordering for KICKITCHEN. Scan, order, and pay – orders go straight to the kitchen.
             </p>
 
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
@@ -165,6 +213,17 @@ const Index = () => {
           {trucksLoading ? (
             <div className="flex justify-center py-12">
               <Loader2 className="w-8 h-8 animate-spin text-primary" />
+            </div>
+          ) : trucksError ? (
+            <div className="rounded-2xl border border-destructive/40 bg-destructive/10 p-6 text-center">
+              <p className="text-sm text-destructive">{trucksError}</p>
+              <Button
+                variant="outline"
+                className="mt-4"
+                onClick={() => window.location.reload()}
+              >
+                Retry
+              </Button>
             </div>
           ) : trucks.length === 0 ? (
             <p className="text-center text-muted-foreground py-8">No restaurants available yet. Try the demo menu above!</p>
@@ -279,7 +338,7 @@ const Index = () => {
             Ready to Streamline Your Orders?
           </h2>
           <p className="relative text-accent-foreground/70 mb-8">
-            Try the demo to see how Smackin Jacks can transform your food truck operation
+            Try the demo to see how KICKITCHEN can transform your food truck operation
           </p>
           <Button
             size="xl"
@@ -294,7 +353,7 @@ const Index = () => {
       {/* Footer */}
       <footer className="py-8 px-6 border-t border-border">
         <div className="max-w-4xl mx-auto text-center text-muted-foreground text-sm">
-          <p>Smackin Jacks • Mobile-First Food Truck Ordering</p>
+          <p>KICKITCHEN • Mobile-First Food Truck Ordering</p>
         </div>
       </footer>
     </div>

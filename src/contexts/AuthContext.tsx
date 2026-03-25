@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { User, Session } from '@supabase/supabase-js';
-import { supabase } from '@/integrations/supabase/client';
+import { supabase, SUPABASE_CONNECTIVITY_HINT } from '@/integrations/supabase/client';
 
 interface Profile {
   id: string;
@@ -108,7 +108,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Login failed";
       setError(msg.includes("fetch") || msg.includes("Failed") || msg.includes("timed out")
-        ? "Cannot reach server. Check Vercel env vars and redeploy."
+        ? SUPABASE_CONNECTIVITY_HINT
         : msg);
       return { error: err instanceof Error ? err : new Error(msg) };
     }
@@ -145,7 +145,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       };
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Signup failed";
-      setError(msg.includes("fetch") || msg.includes("Failed") ? "Cannot reach server. Add VITE_SUPABASE_URL and VITE_SUPABASE_PUBLISHABLE_KEY in Vercel → Settings → Environment Variables, then redeploy." : msg);
+      setError(
+        msg.includes("fetch") || msg.includes("Failed") || msg.includes("timed out")
+          ? SUPABASE_CONNECTIVITY_HINT
+          : msg
+      );
       return {
         error: err instanceof Error ? err : new Error(msg),
         needsEmailConfirmation: false,

@@ -3,11 +3,13 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { motion } from 'framer-motion';
-import { Store, Loader2 } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
+import { SupabaseEnvBanner } from '@/components/SupabaseEnvBanner';
+import { ConnectivityErrorHint } from '@/components/ConnectivityErrorHint';
 
 const LoginPage = () => {
   const navigate = useNavigate();
-  const { signIn, error, clearError, loading } = useAuth();
+  const { signIn, error, clearError } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -16,9 +18,12 @@ const LoginPage = () => {
     e.preventDefault();
     clearError();
     setIsSubmitting(true);
-    const { error } = await signIn(email, password);
-    setIsSubmitting(false);
-    if (!error) navigate('/admin');
+    try {
+      const { error } = await signIn(email, password);
+      if (!error) navigate('/admin');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -29,15 +34,20 @@ const LoginPage = () => {
         className="w-full max-w-md"
       >
         <div className="bg-card rounded-2xl border border-border p-8 shadow-lg">
+          <SupabaseEnvBanner />
           <div className="text-center mb-8">
-            <div className="w-14 h-14 bg-primary rounded-2xl flex items-center justify-center mx-auto mb-4">
-              <Store className="w-8 h-8 text-primary-foreground" />
-            </div>
+            <img
+              src="/logo.png"
+              alt="KICKITCHEN"
+              className="h-14 w-auto mx-auto mb-4 object-contain"
+              width={56}
+              height={56}
+            />
             <h1 className="text-2xl font-bold text-foreground">Restaurant Login</h1>
             <p className="text-muted-foreground mt-1">Sign in to manage your menu and orders</p>
           </div>
 
-          <form onSubmit={handleSubmit} className="space-y-4">
+          <form onSubmit={handleSubmit} className="space-y-4" autoComplete="off">
             <div>
               <label className="block text-sm font-medium text-foreground mb-2">Email</label>
               <input
@@ -46,7 +56,7 @@ const LoginPage = () => {
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="you@restaurant.com"
                 required
-                autoComplete="email"
+                autoComplete="off"
                 className="w-full p-3 rounded-lg border border-border bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
               />
             </div>
@@ -66,6 +76,7 @@ const LoginPage = () => {
             {error && (
               <div className="p-3 rounded-lg bg-destructive/10 text-destructive text-sm">
                 {error}
+                {error && <ConnectivityErrorHint message={error} />}
               </div>
             )}
 
@@ -74,10 +85,13 @@ const LoginPage = () => {
               variant="cart"
               size="lg"
               className="w-full"
-              disabled={loading || isSubmitting}
+              disabled={isSubmitting}
             >
-              {isSubmitting || loading ? (
-                <Loader2 className="w-5 h-5 animate-spin" />
+              {isSubmitting ? (
+                <>
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                  Signing in...
+                </>
               ) : (
                 'Sign In'
               )}

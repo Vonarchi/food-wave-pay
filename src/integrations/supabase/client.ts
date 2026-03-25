@@ -5,13 +5,62 @@ import type { Database } from './types';
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_PUBLISHABLE_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
 
-// Import the supabase client like this:
-// import { supabase } from "@/integrations/supabase/client";
+/** True when this build has non-empty Supabase URL + anon key (still may be wrong URL). */
+export const isSupabaseClientConfigured = Boolean(
+  SUPABASE_URL?.trim() && SUPABASE_PUBLISHABLE_KEY?.trim()
+);
 
-export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
+/** Host baked into this build (for troubleshooting "cannot reach server"). */
+export function getSupabaseBuildHost(): string {
+  if (!SUPABASE_URL?.trim()) return "(empty — VITE_SUPABASE_URL not set at build time)";
+  try {
+    return new URL(SUPABASE_URL).hostname;
+  } catch {
+    return "(invalid VITE_SUPABASE_URL)";
+  }
+}
+
+/** Shown when fetch fails (wrong URL → ERR_NAME_NOT_RESOLVED, missing env, etc.) */
+export const SUPABASE_CONNECTIVITY_HINT =
+  "Cannot reach server. Check Vercel env vars and redeploy: set VITE_SUPABASE_URL (https://YOUR_REF.supabase.co) and VITE_SUPABASE_PUBLISHABLE_KEY from Supabase → Project Settings → API. They must match the project where your database lives. Redeploy after saving—Vite bakes env in at build time. If the URL is wrong you’ll see ERR_NAME_NOT_RESOLVED in the browser Network tab.";
+
+if (!SUPABASE_URL || !SUPABASE_PUBLISHABLE_KEY) {
+  console.error(
+    "Missing Supabase env vars. Add VITE_SUPABASE_URL and VITE_SUPABASE_PUBLISHABLE_KEY in Vercel → Settings → Environment Variables, then redeploy."
+  );
+} else if (typeof window !== "undefined") {
+  try {
+    const host = new URL(SUPABASE_URL).hostname;
+    if (!host.endsWith(".supabase.co")) {
+      console.warn("[Supabase] VITE_SUPABASE_URL host should be *.supabase.co, got:", host);
+    } else {
+      console.info("[Supabase] Using host:", host);
+    }
+  } catch {
+    console.error("[Supabase] Invalid VITE_SUPABASE_URL:", SUPABASE_URL);
+  }
+}
+
+// Custom fetch to prevent 304 caching — auth can hang when responses are cached.
+// Must preserve Authorization/apikey: spreading Headers fails, use Headers constructor.
+const noCacheFetch = (url: RequestInfo | URL, init?: RequestInit) => {
+  const headers = new Headers(init?.headers);
+  headers.set("Cache-Control", "no-cache");
+  headers.set("Pragma", "no-cache");
+  return fetch(url, { ...init, cache: "no-store", headers });
+};
+
+// Bypass navigator.locks — can deadlock and cause getSession to hang indefinitely
+const noopLock = async <R>(_name: string, _acquireTimeout: number, fn: () => Promise<R>) => fn();
+
+export const supabase = createClient<Database>(SUPABASE_URL || "", SUPABASE_PUBLISHABLE_KEY || "", {
   auth: {
     storage: localStorage,
     persistSession: true,
     autoRefreshToken: true,
-  }
+    lock: noopLock,
+  },
+  global: {
+    fetch: noCacheFetch,
+  },
 });

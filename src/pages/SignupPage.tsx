@@ -4,6 +4,8 @@ import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { motion } from 'framer-motion';
 import { Loader2 } from 'lucide-react';
+import { SupabaseEnvBanner } from '@/components/SupabaseEnvBanner';
+import { ConnectivityErrorHint } from '@/components/ConnectivityErrorHint';
 
 const SignupPage = () => {
   const navigate = useNavigate();
@@ -52,6 +54,7 @@ const SignupPage = () => {
         className="w-full max-w-md"
       >
         <div className="bg-card rounded-2xl border border-border p-8 shadow-lg">
+          <SupabaseEnvBanner />
           <div className="text-center mb-8">
             <img
               src="/logo.png"
@@ -105,6 +108,7 @@ const SignupPage = () => {
             {error && (
               <div className="p-3 rounded-lg bg-destructive/10 text-destructive text-sm">
                 {error}
+                {error && <ConnectivityErrorHint message={error} />}
               </div>
             )}
 

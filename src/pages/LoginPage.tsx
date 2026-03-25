@@ -40,7 +40,7 @@ const LoginPage = () => {
           <div className="text-center mb-8">
             <img
               src="/logo.png"
-              alt="KICKITCHEN"
+              alt="KioKitchen"
               className="h-14 w-auto mx-auto mb-4 object-contain"
               width={56}
               height={56}

@@ -1,7 +1,7 @@
 {
-  "name": "KICKITCHEN - Food Truck Ordering",
-  "short_name": "KICKITCHEN",
-  "description": "Order food from KICKITCHEN instantly",
+  "name": "KioKitchen - Food Truck Ordering",
+  "short_name": "KioKitchen",
+  "description": "Order food from KioKitchen instantly",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#FDF8F4",

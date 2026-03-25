@@ -87,7 +87,7 @@ const Index = () => {
             <div className="flex justify-center mb-6">
               <img
                 src="/logo.png"
-                alt="KICKITCHEN"
+                alt="KioKitchen"
                 className="h-16 md:h-20 w-auto object-contain max-w-[180px]"
                 width={160}
                 height={160}
@@ -100,10 +100,10 @@ const Index = () => {
             </div>
             
             <h1 className="text-4xl md:text-6xl font-bold text-primary-foreground mb-6 leading-tight">
-              KICKITCHEN
+              KioKitchen
             </h1>
             <p className="text-xl md:text-2xl text-primary-foreground/80 mb-8 max-w-2xl mx-auto">
-              QR-powered mobile ordering for KICKITCHEN. Scan, order, and pay – orders go straight to the kitchen.
+              QR-powered mobile ordering for KioKitchen. Scan, order, and pay – orders go straight to the kitchen.
             </p>
 
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
@@ -338,7 +338,7 @@ const Index = () => {
             Ready to Streamline Your Orders?
           </h2>
           <p className="relative text-accent-foreground/70 mb-8">
-            Try the demo to see how KICKITCHEN can transform your food truck operation
+            Try the demo to see how KioKitchen can transform your food truck operation
           </p>
           <Button
             size="xl"
@@ -353,7 +353,7 @@ const Index = () => {
       {/* Footer */}
       <footer className="py-8 px-6 border-t border-border">
         <div className="max-w-4xl mx-auto text-center text-muted-foreground text-sm">
-          <p>KICKITCHEN • Mobile-First Food Truck Ordering</p>
+          <p>KioKitchen • Mobile-First Food Truck Ordering</p>
         </div>
       </footer>
     </div>

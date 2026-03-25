@@ -3,6 +3,25 @@ import { supabase } from '@/integrations/supabase/client';
 import { MenuItem, ModifierGroup } from '@/types';
 import { sampleFoodTruck } from '@/data/sampleData';
 
+/** Hard cap so a stalled PostgREST fetch cannot leave the menu in an infinite loading state (seen in prod). */
+const MENU_FETCH_TIMEOUT_MS = 15000;
+
+function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const t = setTimeout(() => reject(new Error(`${label}_timeout`)), ms);
+    promise.then(
+      (v) => {
+        clearTimeout(t);
+        resolve(v);
+      },
+      (e) => {
+        clearTimeout(t);
+        reject(e);
+      }
+    );
+  });
+}
+
 interface UseMenuItemsResult {
   items: MenuItem[];
   categories: string[];
@@ -15,6 +34,8 @@ interface UseMenuItemsResult {
   truckAccentColor?: string;
   isLoading: boolean;
   error: string | null;
+  /** True when showing sample data (empty DB, error, or timeout). */
+  usingFallback: boolean;
 }
 
 const mapDbItemToMenuItem = (row: {
@@ -67,20 +88,28 @@ export const useMenuItems = (truckId: string): UseMenuItemsResult => {
       setError(null);
 
       try {
-        // Fetch truck info and menu items in parallel
-        const [truckResult, menuResult] = await Promise.all([
-          supabase
-            .from('food_trucks' as any)
-            .select('*')
-            .eq('slug', truckId)
-            .maybeSingle(),
-          supabase
-            .from('menu_items')
-            .select('*')
-            .eq('truck_id', truckId)
-            .order('category')
-            .order('name'),
-        ]);
+        console.info("[useMenuItems] fetch start", { truckId });
+
+        // Fetch truck info and menu items in parallel — bounded so prod network stalls cannot spin forever.
+        const [truckResult, menuResult] = await withTimeout(
+          Promise.all([
+            supabase
+              .from('food_trucks' as any)
+              .select('*')
+              .eq('slug', truckId)
+              .maybeSingle(),
+            supabase
+              .from('menu_items')
+              .select('*')
+              .eq('truck_id', truckId)
+              .order('category')
+              .order('name'),
+          ]),
+          MENU_FETCH_TIMEOUT_MS,
+          "menu_fetch"
+        );
+
+        console.info("[useMenuItems] fetch ok", { truckId });
 
         // Set truck info
         if (truckResult.data) {
@@ -107,8 +136,13 @@ export const useMenuItems = (truckId: string): UseMenuItemsResult => {
           setUsingFallback(true);
         }
       } catch (err) {
-        console.error('Failed to fetch menu items:', err);
-        setError('Failed to load menu');
+        const msg = err instanceof Error ? err.message : String(err);
+        console.warn("[useMenuItems] fetch failed", { truckId, msg });
+        setError(
+          msg.endsWith("_timeout")
+            ? "Menu load timed out. Showing sample menu — check network or Supabase."
+            : "Failed to load menu. Showing sample menu."
+        );
         setItems(sampleFoodTruck.menu);
         setUsingFallback(true);
       } finally {
@@ -140,5 +174,6 @@ export const useMenuItems = (truckId: string): UseMenuItemsResult => {
     truckAccentColor: truckInfo?.accent_color,
     isLoading,
     error,
+    usingFallback,
   };
 };

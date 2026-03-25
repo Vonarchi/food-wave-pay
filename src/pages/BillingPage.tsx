@@ -23,17 +23,34 @@ const BillingPage = () => {
 
   useEffect(() => {
     const fetchProfile = async () => {
-      if (!user) return;
-      const { data } = await supabase
-        .from('profiles')
-        .select('subscription_status')
-        .eq('id', user.id)
-        .single();
-      setSubscriptionStatus(data?.subscription_status || 'inactive');
-      setLoading(false);
+      if (!user) {
+        setSubscriptionStatus('inactive');
+        setLoading(false);
+        return;
+      }
+
+      try {
+        const result = await Promise.race([
+          supabase
+            .from('profiles')
+            .select('subscription_status')
+            .eq('id', user.id)
+            .single(),
+          new Promise<never>((_, reject) =>
+            setTimeout(() => reject(new Error('Billing profile request timed out')), 8000)
+          ),
+        ]);
+
+        setSubscriptionStatus(result.data?.subscription_status || 'inactive');
+      } catch (error) {
+        console.warn('[billing] Failed to load subscription status:', error);
+        setSubscriptionStatus('inactive');
+      } finally {
+        setLoading(false);
+      }
     };
     fetchProfile();
-  }, [user?.id]);
+  }, [user]);
 
   const handleSubscribe = async () => {
     setCheckoutLoading(true);

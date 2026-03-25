@@ -1,6 +1,11 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useState } from 'react';
 import { User, Session } from '@supabase/supabase-js';
-import { supabase, SUPABASE_CONNECTIVITY_HINT } from '@/integrations/supabase/client';
+import {
+  getSupabaseBuildHost,
+  isSupabaseClientConfigured,
+  supabase,
+  SUPABASE_CONNECTIVITY_HINT,
+} from '@/integrations/supabase/client';
 
 interface Profile {
   id: string;
@@ -28,12 +33,56 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+function formatAuthFailure(message: string) {
+  const host = getSupabaseBuildHost();
+
+  if (!isSupabaseClientConfigured) {
+    return SUPABASE_CONNECTIVITY_HINT;
+  }
+
+  if (message.includes('timed out')) {
+    return `Auth request timed out while calling ${host}. Supabase is configured in this build, so this is more likely a slow/blocked auth request than missing Vercel env vars. Check the browser Network tab for /auth/v1/token or /auth/v1/signup.`;
+  }
+
+  if (message.includes('fetch') || message.includes('Failed')) {
+    return `Auth request failed while calling ${host}. Supabase URL is present in this build. Check the browser Network tab for the exact /auth/v1/* failure before changing Vercel env vars.`;
+  }
+
+  return message;
+}
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  const fetchProfile = useCallback(async (userId: string) => {
+    try {
+      const res = await Promise.race([
+        supabase
+          .from('profiles')
+          .select('id, email, full_name, phone, restaurant_name')
+          .eq('id', userId)
+          .single(),
+        new Promise<'profile_fetch_timeout'>((resolve) => setTimeout(() => resolve('profile_fetch_timeout'), 8000)),
+      ]);
+
+      if (res === "profile_fetch_timeout") {
+        console.warn("[auth] fetchProfile timed out (non-blocking)");
+        setProfile(null);
+        return;
+      }
+
+      const { data, error: qErr } = res;
+      if (qErr) console.warn("[auth] fetchProfile:", qErr.message);
+      setProfile((data as Profile | null) ?? null);
+    } catch (e) {
+      console.warn("[auth] fetchProfile failed", e);
+      setProfile(null);
+    }
+  }, []);
 
   useEffect(() => {
     let done = false;
@@ -46,19 +95,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // 1.5s hard cap — getSession/onAuthStateChange can hang (lock deadlock, 304).
     const timeoutId = setTimeout(finish, 1500);
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
-        clearTimeout(timeoutId);
-        setSession(session);
-        setUser(session?.user ?? null);
-        if (session?.user) {
-          await fetchProfile(session.user.id);
-        } else {
-          setProfile(null);
-        }
-        finish();
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      clearTimeout(timeoutId);
+      console.info("[auth] onAuthStateChange", event, session?.user?.id ?? "no-session");
+      setSession(session);
+      setUser(session?.user ?? null);
+      if (session?.user) {
+        // Never block loading=false on profile fetch — hung REST calls caused infinite spinners in production.
+        void fetchProfile(session.user.id);
+      } else {
+        setProfile(null);
       }
-    );
+      finish();
+    });
 
     // getSession can hang — race it with timeout, prefer onAuthStateChange
     Promise.race([
@@ -68,14 +117,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       .then(({ data: { session } }) => {
         if (!done) {
           clearTimeout(timeoutId);
+          console.info("[auth] getSession resolved", session?.user?.id ?? "no-session");
           setSession(session);
           setUser(session?.user ?? null);
-          if (session?.user) fetchProfile(session.user.id);
+          if (session?.user) void fetchProfile(session.user.id);
           finish();
         }
       })
-      .catch(() => {
+      .catch((e) => {
         if (!done) clearTimeout(timeoutId);
+        console.warn("[auth] getSession race finished:", e instanceof Error ? e.message : e);
         finish();
       });
 
@@ -83,19 +134,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       clearTimeout(timeoutId);
       subscription.unsubscribe();
     };
-  }, []);
-
-  const fetchProfile = async (userId: string) => {
-    const { data } = await supabase
-      .from('profiles')
-      .select('id, email, full_name, phone, restaurant_name')
-      .eq('id', userId)
-      .single();
-    setProfile(data as Profile | null);
-  };
+  }, [fetchProfile]);
 
   const signIn = async (email: string, password: string) => {
     setError(null);
+    console.info("[sign-in] attempting signInWithPassword");
     try {
       const { error } = await Promise.race([
         supabase.auth.signInWithPassword({ email, password }),
@@ -103,13 +146,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           setTimeout(() => reject(new Error("Request timed out")), 15000)
         ),
       ]);
-      if (error) setError(error.message);
+      if (error) {
+        console.warn("[sign-in] supabase error:", error.message);
+        setError(error.message);
+      } else {
+        console.info("[sign-in] success");
+      }
       return { error };
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Login failed";
-      setError(msg.includes("fetch") || msg.includes("Failed") || msg.includes("timed out")
-        ? SUPABASE_CONNECTIVITY_HINT
-        : msg);
+      console.warn("[sign-in] failed:", msg);
+      setError(formatAuthFailure(msg));
       return { error: err instanceof Error ? err : new Error(msg) };
     }
   };
@@ -145,11 +192,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       };
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Signup failed";
-      setError(
-        msg.includes("fetch") || msg.includes("Failed") || msg.includes("timed out")
-          ? SUPABASE_CONNECTIVITY_HINT
-          : msg
-      );
+      setError(formatAuthFailure(msg));
       return {
         error: err instanceof Error ? err : new Error(msg),
         needsEmailConfirmation: false,

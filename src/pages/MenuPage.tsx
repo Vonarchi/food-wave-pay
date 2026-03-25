@@ -8,17 +8,32 @@ import { ItemCustomizer } from '@/components/menu/ItemCustomizer';
 import { CartButton } from '@/components/cart/CartButton';
 import { CartDrawer } from '@/components/cart/CartDrawer';
 import { motion, AnimatePresence } from 'framer-motion';
-import { MapPin, Clock, Loader2, ArrowLeft } from 'lucide-react';
+import { MapPin, Clock, Loader2, ArrowLeft, AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+const LOADING_STUCK_AFTER_MS = 18_000;
 
 const MenuPage = () => {
   const { truckId = 'demo' } = useParams<{ truckId: string }>();
   const navigate = useNavigate();
-  const { items, categories, truckName, truckDescription, truckLocation, truckHours, truckLogo, truckAccentColor, isLoading, error } = useMenuItems(truckId);
+  const {
+    items,
+    categories,
+    truckName,
+    truckDescription,
+    truckLocation,
+    truckHours,
+    truckLogo,
+    truckAccentColor,
+    isLoading,
+    error,
+    usingFallback,
+  } = useMenuItems(truckId);
 
   const [activeCategory, setActiveCategory] = useState<string>('');
   const [selectedItem, setSelectedItem] = useState<MenuItem | null>(null);
   const [isCartOpen, setIsCartOpen] = useState(false);
+  const [loadingStuck, setLoadingStuck] = useState(false);
 
   // Set initial category when categories load
   useEffect(() => {
@@ -27,21 +42,46 @@ const MenuPage = () => {
     }
   }, [categories, activeCategory]);
 
-  if (isLoading) {
+  // Belt-and-suspenders: if hook ever fails to clear loading, never spin forever.
+  useEffect(() => {
+    if (!isLoading) {
+      setLoadingStuck(false);
+      return;
+    }
+    const t = window.setTimeout(() => setLoadingStuck(true), LOADING_STUCK_AFTER_MS);
+    return () => window.clearTimeout(t);
+  }, [isLoading]);
+
+  useEffect(() => {
+    if (!isLoading) {
+      console.info('[MenuPage] ready', { truckId, usingFallback, hasError: Boolean(error) });
+    }
+  }, [isLoading, truckId, usingFallback, error]);
+
+  if (isLoading && loadingStuck) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center p-4">
-        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+        <div className="max-w-md rounded-2xl border border-border bg-card p-6 text-center shadow-sm">
+          <AlertTriangle className="w-10 h-10 text-amber-500 mx-auto mb-3" />
+          <h1 className="text-lg font-semibold text-foreground">Menu is taking too long</h1>
+          <p className="mt-2 text-sm text-muted-foreground">
+            Loading exceeded {LOADING_STUCK_AFTER_MS / 1000}s. This is unexpected — try refreshing or check the browser Network tab for Supabase requests.
+          </p>
+          <Button className="mt-4" onClick={() => window.location.reload()}>
+            Reload page
+          </Button>
+          <Button variant="outline" className="mt-4 ms-2" onClick={() => navigate('/')}>
+            Go home
+          </Button>
+        </div>
       </div>
     );
   }
 
-  if (error && items.length === 0) {
+  if (isLoading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center p-4">
-        <div className="text-center">
-          <h1 className="text-2xl font-bold text-foreground mb-2">Menu not found</h1>
-          <p className="text-muted-foreground">{error}</p>
-        </div>
+        <Loader2 className="w-8 h-8 animate-spin text-primary" />
       </div>
     );
   }
@@ -55,6 +95,20 @@ const MenuPage = () => {
 
   return (
     <div className="min-h-screen bg-background pb-24">
+      {(error || usingFallback) && (
+        <div className="px-4 pt-4 safe-top">
+          <Alert variant={error ? 'destructive' : 'default'} className="text-left">
+            <AlertTriangle className="h-4 w-4" />
+            <AlertTitle>{error ? 'Menu could not load from the server' : 'Sample menu'}</AlertTitle>
+            <AlertDescription className="mt-1 space-y-2">
+              <p>{error ?? 'Showing demo items until live data is available for this truck.'}</p>
+              <Button variant="outline" size="sm" onClick={() => window.location.reload()}>
+                Retry
+              </Button>
+            </AlertDescription>
+          </Alert>
+        </div>
+      )}
       {/* Header */}
       <header
         className={`p-6 pt-12 safe-top relative ${!truckAccentColor ? 'bg-gradient-to-br from-primary to-accent' : ''}`}

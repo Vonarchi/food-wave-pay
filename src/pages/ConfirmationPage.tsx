@@ -44,6 +44,8 @@ const ConfirmationPage = () => {
 
   // Fetch order by ID when not in store (e.g. after refresh)
   useEffect(() => {
+    let active = true;
+
     if (orderFromStore) {
       setFetchedOrder(null);
       setLoading(false);
@@ -55,19 +57,38 @@ const ConfirmationPage = () => {
       return;
     }
     const fetchOrder = async () => {
-      const { data, error } = await supabase
-        .from('orders')
-        .select('*')
-        .eq('id', orderId)
-        .single();
-      if (error || !data) {
+      try {
+        const result = await Promise.race([
+          supabase
+            .from('orders')
+            .select('*')
+            .eq('id', orderId)
+            .single(),
+          new Promise<never>((_, reject) =>
+            setTimeout(() => reject(new Error('Order lookup timed out')), 8000)
+          ),
+        ]);
+
+        if (!active) return;
+
+        if (result.error || !result.data) {
+          setNotFound(true);
+        } else {
+          setFetchedOrder(mapDbRowToOrder(result.data as Parameters<typeof mapDbRowToOrder>[0]));
+        }
+      } catch (error) {
+        console.warn('[confirmation] Failed to load order:', error);
+        if (!active) return;
         setNotFound(true);
-      } else {
-        setFetchedOrder(mapDbRowToOrder(data as Parameters<typeof mapDbRowToOrder>[0]));
+      } finally {
+        if (active) setLoading(false);
       }
-      setLoading(false);
     };
     fetchOrder();
+
+    return () => {
+      active = false;
+    };
   }, [orderId, orderFromStore]);
 
   const order = orderFromStore ?? fetchedOrder;

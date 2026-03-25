@@ -18,8 +18,10 @@ const LoginPage = () => {
     e.preventDefault();
     clearError();
     setIsSubmitting(true);
+    console.info("[sign-in] form submit");
     try {
       const { error } = await signIn(email, password);
+      console.info("[sign-in] submit finished", { hasError: Boolean(error) });
       if (!error) navigate('/admin');
     } finally {
       setIsSubmitting(false);

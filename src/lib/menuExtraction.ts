@@ -55,17 +55,39 @@ export function mapApiModifiersToApp(groups: ApiModifierGroup[] | undefined): Mo
 
 type LegacyRow = {
   name?: string;
+  item_name?: string;
+  title?: string;
+  dish?: string;
+  item?: string;
   description?: string;
-  price?: number;
+  price?: number | string;
   category?: string;
   category_name?: string;
   modifier_groups?: ApiModifierGroup[];
 };
 
+function pickLegacyName(row: LegacyRow): string {
+  const parts = [row.name, row.item_name, row.title, row.dish, typeof row.item === 'string' ? row.item : undefined];
+  for (const p of parts) {
+    const s = typeof p === 'string' ? p.trim() : '';
+    if (s) return s;
+  }
+  return '';
+}
+
+function coerceLegacyPrice(value: unknown): number {
+  if (typeof value === 'number' && !Number.isNaN(value)) return value;
+  if (typeof value === 'string') {
+    const n = parseFloat(value.replace(/[^0-9.-]/g, ''));
+    return Number.isFinite(n) ? n : 0;
+  }
+  return 0;
+}
+
 function rowToDraft(row: LegacyRow, fallbackCategory: string): DraftMenuItem | null {
-  const name = row?.name?.trim();
+  const name = pickLegacyName(row);
   if (!name) return null;
-  const price = typeof row.price === 'number' && !Number.isNaN(row.price) ? row.price : 0;
+  const price = coerceLegacyPrice(row.price);
   const category = (row.category || row.category_name || fallbackCategory || 'Main').trim() || 'Main';
   return {
     name,
@@ -89,6 +111,8 @@ export function normalizeExtractionPayload(payload: unknown): DraftMenuItem[] {
     if (Array.isArray(o.menu_items)) root = o.menu_items;
     else if (Array.isArray(o.items)) root = o.items;
     else if (Array.isArray(o.menuItems)) root = o.menuItems;
+    else if (Array.isArray(o.dishes)) root = o.dishes;
+    else if (Array.isArray(o.entries)) root = o.entries;
     else return [];
   }
 

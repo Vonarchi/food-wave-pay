@@ -14,6 +14,8 @@ supabase functions deploy extract-menu
 
 Create the key in [Google AI Studio](https://aistudio.google.com/apikey) (not a random Google Cloud key unless it has Generative Language API enabled). If Gemini returns **API_KEY_INVALID**, replace the secret with a new AI Studio key and redeploy.
 
+If the app shows **no dishes parsed** but no API error: redeploy this function so normalization + Gemini response handling match the repo, then check **Logs** for lines `zero items after normalize` or `Raw Gemini content`.
+
 **Request:** `POST` with `{ "imageUrl": "https://..." }` (public URL of uploaded menu image)
 
 ---

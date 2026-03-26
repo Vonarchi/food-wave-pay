@@ -24,8 +24,12 @@ type ApiItem = {
   category_name?: string;
   category?: string;
   name?: string;
+  item_name?: string;
+  title?: string;
+  dish?: string;
+  item?: string;
   description?: string;
-  price?: number;
+  price?: number | string;
 };
 
 function jsonResponse(data: object, status = 200) {
@@ -96,26 +100,69 @@ async function listGenerativeModels(apiKey: string): Promise<string[]> {
   }
 }
 
-function normalizeMenuItems(parsed: unknown): { items: object[] } {
-  let rawItems: ApiItem[] = [];
+function coercePrice(value: unknown): number {
+  if (typeof value === "number" && !Number.isNaN(value)) return value;
+  if (typeof value === "string") {
+    const n = parseFloat(value.replace(/[^0-9.-]/g, ""));
+    return Number.isFinite(n) ? n : 0;
+  }
+  return 0;
+}
+
+function pickItemName(row: ApiItem): string {
+  const candidates = [
+    row.name,
+    row.item_name,
+    row.title,
+    row.dish,
+    typeof row.item === "string" ? row.item : undefined,
+  ];
+  for (const c of candidates) {
+    if (typeof c === "string" && c.trim()) return c.trim();
+  }
+  return "";
+}
+
+/** Collect menu rows from Gemini / loosely-shaped JSON */
+function collectRawMenuRows(parsed: unknown): ApiItem[] {
+  if (parsed == null) return [];
 
   if (Array.isArray(parsed)) {
-    rawItems = parsed as ApiItem[];
-  } else if (parsed && typeof parsed === "object") {
-    const obj = parsed as Record<string, unknown>;
-    if (Array.isArray(obj.menu_items)) rawItems = obj.menu_items as ApiItem[];
-    else if (Array.isArray(obj.items)) rawItems = obj.items as ApiItem[];
+    return parsed.filter((x) => x && typeof x === "object") as ApiItem[];
   }
+
+  if (typeof parsed !== "object") return [];
+
+  const obj = parsed as Record<string, unknown>;
+  const keys = ["menu_items", "items", "menuItems", "dishes", "foods", "entries"] as const;
+  for (const k of keys) {
+    const arr = obj[k];
+    if (Array.isArray(arr)) return arr.filter((x) => x && typeof x === "object") as ApiItem[];
+  }
+
+  for (const val of Object.values(obj)) {
+    if (!Array.isArray(val) || val.length === 0) continue;
+    const first = val[0];
+    if (first && typeof first === "object" && pickItemName(first as ApiItem)) {
+      return val as ApiItem[];
+    }
+  }
+
+  return [];
+}
+
+function normalizeMenuItems(parsed: unknown): { items: object[] } {
+  const rawItems = collectRawMenuRows(parsed);
 
   const items = rawItems
     .map((row) => {
-      const name = typeof row.name === "string" ? row.name.trim() : "";
+      const name = pickItemName(row);
       if (!name) return null;
 
       const categorySource = row.category_name || row.category || "Main";
       const category = typeof categorySource === "string" ? categorySource.trim() || "Main" : "Main";
       const description = typeof row.description === "string" ? row.description.trim() : "";
-      const price = typeof row.price === "number" && !Number.isNaN(row.price) ? row.price : 0;
+      const price = coercePrice(row.price);
 
       return {
         name,
@@ -148,10 +195,11 @@ Preferred shape:
 Rules:
 - Extract only items visible in the image.
 - Use category headings when visible; otherwise infer simple categories like Appetizers, Mains, Sides, Drinks, Desserts.
+- Every item MUST include string "name" and numeric "price" (use 0 if unreadable).
 - description should be an empty string if not clearly shown.
-- price must be a number only, no currency symbol.
-- If a price is unreadable, use 0.
-- Do not invent items or extra fields.`;
+- price must be a JSON number when possible; strings like "12.99" are acceptable.
+- Do not invent items or extra fields.
+- Put all dishes inside the "menu_items" array only.`;
 
 serve(async (req) => {
   console.log("[extract-menu] incoming", req.method, new Date().toISOString());
@@ -320,14 +368,39 @@ serve(async (req) => {
     }
 
     const payload = (await geminiResponse.json()) as {
+      promptFeedback?: { blockReason?: string };
       candidates?: Array<{
+        finishReason?: string;
         content?: {
           parts?: Array<{ text?: string }>;
         };
       }>;
     };
 
-    const content = payload.candidates?.[0]?.content?.parts?.[0]?.text || "{}";
+    const blockReason = payload.promptFeedback?.blockReason;
+    if (blockReason) {
+      console.warn("[extract-menu] prompt blocked:", blockReason);
+      return jsonResponse(
+        {
+          error: `Model blocked this image (${blockReason}). Try a different photo or cropping; menu text must be clearly visible.`,
+        },
+        502,
+      );
+    }
+
+    const candidate = payload.candidates?.[0];
+    const finish = candidate?.finishReason;
+    if (finish && finish !== "STOP" && finish !== "MAX_TOKENS") {
+      console.warn("[extract-menu] finishReason (still attempting parse):", finish);
+    }
+
+    const parts = candidate?.content?.parts ?? [];
+    const content = parts.map((p) => (typeof p.text === "string" ? p.text : "")).join("").trim() || "{}";
+
+    if (content === "{}" || !content.length) {
+      console.error("[extract-menu] Empty model text; candidates:", JSON.stringify(payload.candidates).slice(0, 400));
+      return jsonResponse({ error: "Model returned empty content. Try again or use a clearer menu photo." }, 502);
+    }
 
     let parsed: unknown;
     try {
@@ -335,12 +408,27 @@ serve(async (req) => {
       parsed = JSON.parse(cleaned || "{}");
     } catch (error) {
       console.error("[extract-menu] Failed to parse Gemini JSON:", error);
-      console.log("[extract-menu] Raw Gemini content:", content.slice(0, 500));
+      console.log("[extract-menu] Raw Gemini content:", content.slice(0, 800));
       return jsonResponse({ error: "Model returned invalid JSON. Try a clearer menu photo." }, 502);
     }
 
     const normalized = normalizeMenuItems(parsed);
     console.log("[extract-menu] extracted items:", normalized.items.length);
+
+    if (normalized.items.length === 0) {
+      const topKeys =
+        parsed && typeof parsed === "object" && !Array.isArray(parsed)
+          ? Object.keys(parsed as object).join(", ")
+          : Array.isArray(parsed)
+            ? `array(len=${parsed.length})`
+            : String(typeof parsed);
+      console.warn("[extract-menu] zero items after normalize; top-level:", topKeys, "sample:", content.slice(0, 400));
+      return jsonResponse({
+        items: [],
+        error:
+          `No dishes could be read from the model output (shape: ${topKeys}). Check extract-menu logs in Supabase, or retry with a sharper, well-lit photo.`,
+      });
+    }
 
     return jsonResponse(normalized);
   } catch (error) {

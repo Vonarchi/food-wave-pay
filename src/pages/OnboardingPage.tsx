@@ -197,15 +197,21 @@ const OnboardingPage = () => {
                     className="mt-3"
                     onClick={async () => {
                       setSaving(true);
-                      await supabase.from('menu_items').insert({
-                        truck_id: slug,
-                        name: 'Sample Item',
-                        price: 0,
-                        category: category,
-                        description: 'Edit in Menu Admin',
-                      });
-                      setSaving(false);
-                      toast.success('Category created with sample item');
+                      try {
+                        const { error } = await supabase.from('menu_items').insert({
+                          truck_id: slug,
+                          name: 'Sample Item',
+                          price: 0,
+                          category: category,
+                          description: 'Edit in Menu Admin',
+                        });
+                        if (error) throw error;
+                        toast.success('Category created with sample item');
+                      } catch {
+                        toast.error('Could not add sample item');
+                      } finally {
+                        setSaving(false);
+                      }
                     }}
                     disabled={saving}
                   >

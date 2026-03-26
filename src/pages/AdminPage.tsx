@@ -99,8 +99,17 @@ function EditItemDialog({
               disabled={!name.trim() || saving}
               onClick={async () => {
                 setSaving(true);
-                await onSave({ name: name.trim(), description: description || null, price, category, is_available: isAvailable });
-                setSaving(false);
+                try {
+                  await onSave({
+                    name: name.trim(),
+                    description: description || null,
+                    price,
+                    category,
+                    is_available: isAvailable,
+                  });
+                } finally {
+                  setSaving(false);
+                }
               }}
             >
               {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Save'}
@@ -126,6 +135,7 @@ interface ExtractedItem {
 /** Storage uploads should fail fast; extraction can take longer (Gemini + model fallbacks on the server). */
 const UPLOAD_TIMEOUT_MS = 60_000;
 const EXTRACTION_INVOKE_TIMEOUT_MS = 180_000;
+const EXISTING_MENU_FETCH_MS = 20_000;
 /** Failsafe if any awaited step misbehaves and never settles (must exceed upload + invoke caps). */
 const PIPELINE_FAILSAFE_MS = UPLOAD_TIMEOUT_MS + EXTRACTION_INVOKE_TIMEOUT_MS + 15_000;
 
@@ -380,18 +390,34 @@ const AdminPage = () => {
   }, [truckId]);
 
   useEffect(() => {
+    let cancelled = false;
     const fetchExisting = async () => {
       setLoadingExisting(true);
-      const { data } = await supabase
-        .from('menu_items')
-        .select('id, name, description, price, category, image_url, is_available, modifiers')
-        .eq('truck_id', truckId)
-        .order('category')
-        .order('name');
-      setExistingItems((data as DbMenuItem[]) || []);
-      setLoadingExisting(false);
+      try {
+        const result = await Promise.race([
+          supabase
+            .from('menu_items')
+            .select('id, name, description, price, category, image_url, is_available, modifiers')
+            .eq('truck_id', truckId)
+            .order('category')
+            .order('name'),
+          new Promise<never>((_, reject) =>
+            setTimeout(() => reject(new Error('existing_menu_timeout')), EXISTING_MENU_FETCH_MS)
+          ),
+        ]);
+        if (cancelled) return;
+        setExistingItems((result.data as DbMenuItem[]) || []);
+      } catch (e) {
+        console.warn('[admin] load existing menu items:', e);
+        if (!cancelled) setExistingItems([]);
+      } finally {
+        if (!cancelled) setLoadingExisting(false);
+      }
     };
     fetchExisting();
+    return () => {
+      cancelled = true;
+    };
   }, [truckId, isSaving]); // re-fetch after saving new items
 
   const handleItemImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -790,7 +816,16 @@ const AdminPage = () => {
                       size="sm"
                       onClick={() => {
                         setUploadingItemId(item.id);
-                        itemImageInputRef.current?.click();
+                        const inp = itemImageInputRef.current;
+                        if (!inp) return;
+                        const onWinFocus = () => {
+                          window.removeEventListener('focus', onWinFocus);
+                          window.setTimeout(() => {
+                            if (!inp.files?.length) setUploadingItemId(null);
+                          }, 800);
+                        };
+                        window.addEventListener('focus', onWinFocus, { once: true });
+                        inp.click();
                       }}
                     >
                       <Upload className="w-3 h-3 mr-1" />
@@ -803,12 +838,15 @@ const AdminPage = () => {
                       onClick={async () => {
                         if (!confirm(`Delete "${item.name}"?`)) return;
                         setDeletingItemId(item.id);
-                        const { error } = await supabase.from('menu_items').delete().eq('id', item.id);
-                        setDeletingItemId(null);
-                        if (error) toast.error('Failed to delete');
-                        else {
-                          setExistingItems((prev) => prev.filter((i) => i.id !== item.id));
-                          toast.success('Item deleted');
+                        try {
+                          const { error } = await supabase.from('menu_items').delete().eq('id', item.id);
+                          if (error) toast.error('Failed to delete');
+                          else {
+                            setExistingItems((prev) => prev.filter((i) => i.id !== item.id));
+                            toast.success('Item deleted');
+                          }
+                        } finally {
+                          setDeletingItemId(null);
                         }
                       }}
                       disabled={deletingItemId === item.id}

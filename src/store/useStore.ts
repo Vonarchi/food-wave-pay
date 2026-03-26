@@ -109,19 +109,24 @@ export const useOrderStore = create<OrderState>((set, get) => ({
 
   fetchOrders: async () => {
     set({ isLoading: true });
-    const { data, error } = await supabase
-      .from('orders')
-      .select('*')
-      .order('created_at', { ascending: false });
+    try {
+      const { data, error } = await supabase
+        .from('orders')
+        .select('*')
+        .order('created_at', { ascending: false });
 
-    if (error) {
-      console.error('Error fetching orders:', error);
+      if (error) {
+        console.error('Error fetching orders:', error);
+        return;
+      }
+
+      const orders = (data || []).map(mapDbRowToOrder);
+      set({ orders });
+    } catch (e) {
+      console.error('Error fetching orders:', e);
+    } finally {
       set({ isLoading: false });
-      return;
     }
-
-    const orders = (data || []).map(mapDbRowToOrder);
-    set({ orders, isLoading: false });
   },
 
   setOrders: (orders) => set({ orders }),

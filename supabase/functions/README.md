@@ -4,7 +4,7 @@
 
 Extracts menu items from a menu image using Google Gemini AI.
 
-**Env:** `GOOGLE_GEMINI_API_KEY` (Supabase secrets)
+**Env (Edge secrets):** `GOOGLE_GEMINI_API_KEY` (preferred) or `GEMINI_API_KEY` — same value, either name works. Keys are trimmed on read; no quotes or newlines in the dashboard.
 
 **Deploy:**
 ```bash
@@ -12,7 +12,7 @@ supabase secrets set GOOGLE_GEMINI_API_KEY=your_key
 supabase functions deploy extract-menu
 ```
 
-Create the key in [Google AI Studio](https://aistudio.google.com/apikey). If Gemini returns **API_KEY_INVALID**, the secret is wrong, expired, or has whitespace—set a fresh key and redeploy.
+Create the key in [Google AI Studio](https://aistudio.google.com/apikey) (not a random Google Cloud key unless it has Generative Language API enabled). If Gemini returns **API_KEY_INVALID**, replace the secret with a new AI Studio key and redeploy.
 
 **Request:** `POST` with `{ "imageUrl": "https://..." }` (public URL of uploaded menu image)
 

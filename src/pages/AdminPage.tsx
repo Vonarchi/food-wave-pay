@@ -197,17 +197,18 @@ const AdminPage = () => {
       console.info('[kiokitchen:extract] Public imageUrl:', imageUrl);
 
       console.info('[kiokitchen:extract] Invoking edge function extract-menu…');
-      const { data, error } = await supabase.functions.invoke('extract-menu', {
+      const invokeResult = await supabase.functions.invoke('extract-menu', {
         body: { imageUrl },
         timeout: EXTRACTION_INVOKE_TIMEOUT_MS,
       });
+      const { data, error } = invokeResult;
       console.info(
         '[kiokitchen:extract] extract-menu response received:',
         error ? `error: ${error.message}` : `ok, raw items=${Array.isArray(data?.items) ? data.items.length : 0}`
       );
 
       if (error) {
-        let detail = await formatEdgeFunctionFailure(error);
+        let detail = await formatEdgeFunctionFailure(error, invokeResult.response);
         if (/\b404\b/.test(detail) || detail.toLowerCase().includes('not found')) {
           detail += ' — deploy the function: supabase functions deploy extract-menu (project awryxczjacqrgjlctrjc)';
         }

@@ -174,12 +174,15 @@ serve(async (req) => {
       return jsonResponse({ error: "Image URL is required and must be a valid HTTP(S) URL" }, 400);
     }
 
-    const apiKey = Deno.env.get("GOOGLE_GEMINI_API_KEY");
+    const rawKey =
+      Deno.env.get("GOOGLE_GEMINI_API_KEY")?.trim() ||
+      Deno.env.get("GEMINI_API_KEY")?.trim();
+    const apiKey = rawKey || undefined;
     if (!apiKey) {
       return jsonResponse(
         {
           error:
-            "GOOGLE_GEMINI_API_KEY is not set. Run: supabase secrets set GOOGLE_GEMINI_API_KEY=your_key and redeploy extract-menu.",
+            "No Gemini API key in Edge secrets. In Supabase: set GOOGLE_GEMINI_API_KEY (preferred) or GEMINI_API_KEY to a key from https://aistudio.google.com/apikey (paste only the key, no quotes). Then redeploy extract-menu.",
         },
         500,
       );

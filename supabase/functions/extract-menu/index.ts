@@ -6,14 +6,16 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+/** IDs must exist for AI Studio keys on `generativelanguage.googleapis.com/v1` (avoid -latest aliases; they often 404). */
 const STATIC_MODEL_FALLBACK = [
+  "gemini-2.5-flash",
   "gemini-2.0-flash",
-  "gemini-2.0-flash-001",
-  "gemini-flash-latest",
   "gemini-1.5-flash",
   "gemini-1.5-flash-8b",
   "gemini-1.5-pro",
 ] as const;
+
+const GEMINI_API_VERSION = "v1" as const;
 
 type GeminiModelMeta = {
   name?: string;
@@ -70,7 +72,7 @@ function isGeminiInvalidApiKeyError(status: number, body: string): boolean {
 
 async function listGenerativeModels(apiKey: string): Promise<string[]> {
   const url =
-    `https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(apiKey)}`;
+    `https://generativelanguage.googleapis.com/${GEMINI_API_VERSION}/models?key=${encodeURIComponent(apiKey)}`;
 
   try {
     const response = await fetchWithTimeout(url, {}, 15000);
@@ -93,7 +95,8 @@ async function listGenerativeModels(apiKey: string): Promise<string[]> {
 
     const flashModels = modelIds.filter((id) => /flash/i.test(id));
     const otherModels = modelIds.filter((id) => !/flash/i.test(id));
-    return [...flashModels, ...otherModels];
+    const ordered = [...flashModels, ...otherModels];
+    return [...new Set(ordered)];
   } catch (error) {
     console.warn("[extract-menu] models.list request failed:", error);
     return [...STATIC_MODEL_FALLBACK];
@@ -298,7 +301,8 @@ serve(async (req) => {
       },
     };
 
-    const modelIds = await listGenerativeModels(apiKey);
+    const fromList = await listGenerativeModels(apiKey);
+    const modelIds = [...new Set([...fromList, ...STATIC_MODEL_FALLBACK])];
     let geminiResponse: Response | null = null;
     let lastModel = "";
     let lastErrorText = "";
@@ -306,28 +310,46 @@ serve(async (req) => {
     for (let index = 0; index < modelIds.length; index += 1) {
       const model = modelIds[index];
       lastModel = model;
+      lastErrorText = "";
 
-      const url =
-        `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(apiKey)}`;
-
-      geminiResponse = await fetchWithTimeout(
-        url,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "x-goog-api-key": apiKey,
+      const tryGenerate = async (apiVersion: "v1" | "v1beta") => {
+        const u =
+          `https://generativelanguage.googleapis.com/${apiVersion}/models/${encodeURIComponent(
+            model,
+          )}:generateContent?key=${encodeURIComponent(apiKey)}`;
+        return fetchWithTimeout(
+          u,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "x-goog-api-key": apiKey,
+            },
+            body: JSON.stringify(requestBody),
           },
-          body: JSON.stringify(requestBody),
-        },
-        120000,
-      );
+          120000,
+        );
+      };
+
+      geminiResponse = await tryGenerate(GEMINI_API_VERSION);
+      if (!geminiResponse.ok && geminiResponse.status === 404) {
+        const second = await tryGenerate("v1beta");
+        if (second.ok) geminiResponse = second;
+        else {
+          const t1 = await readResponseText(geminiResponse);
+          const t2 = await readResponseText(second);
+          lastErrorText = t2 || t1;
+          geminiResponse = second.status !== 404 ? second : geminiResponse;
+          console.error("[extract-menu] Gemini 404 v1+v1beta:", model, (t2 || t1).slice(0, 300));
+        }
+      }
 
       if (geminiResponse.ok) {
         break;
       }
 
-      lastErrorText = await readResponseText(geminiResponse);
+      lastErrorText =
+        lastErrorText || (await readResponseText(geminiResponse));
       console.error("[extract-menu] Gemini error:", model, geminiResponse.status, lastErrorText.slice(0, 500));
 
       if (isGeminiInvalidApiKeyError(geminiResponse.status, lastErrorText)) {

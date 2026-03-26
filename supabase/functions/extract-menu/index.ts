@@ -49,6 +49,21 @@ async function readResponseText(response: Response): Promise<string> {
   }
 }
 
+/** User-facing hint when Google returns INVALID_ARGUMENT for the Generative Language API key. */
+const GEMINI_KEY_SETUP_MESSAGE =
+  "Fix: In Supabase Dashboard → Project Settings → Edge Functions → Secrets, set GOOGLE_GEMINI_API_KEY to a new key from https://aistudio.google.com/apikey (copy the full key, no quotes or spaces). Save, then run: supabase functions deploy extract-menu --project-ref awryxczjacqrgjlctrjc";
+
+function isGeminiInvalidApiKeyError(status: number, body: string): boolean {
+  if (status !== 400 && status !== 403) return false;
+  const lower = body.toLowerCase();
+  return (
+    lower.includes("api_key_invalid") ||
+    lower.includes("api key not valid") ||
+    lower.includes("please pass a valid api key") ||
+    lower.includes("invalid api key")
+  );
+}
+
 async function listGenerativeModels(apiKey: string): Promise<string[]> {
   const url =
     `https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(apiKey)}`;
@@ -139,6 +154,8 @@ Rules:
 - Do not invent items or extra fields.`;
 
 serve(async (req) => {
+  console.log("[extract-menu] incoming", req.method, new Date().toISOString());
+
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
@@ -261,6 +278,15 @@ serve(async (req) => {
 
       lastErrorText = await readResponseText(geminiResponse);
       console.error("[extract-menu] Gemini error:", model, geminiResponse.status, lastErrorText.slice(0, 500));
+
+      if (isGeminiInvalidApiKeyError(geminiResponse.status, lastErrorText)) {
+        return jsonResponse(
+          {
+            error: `Google Gemini API key is invalid or revoked. ${GEMINI_KEY_SETUP_MESSAGE}`,
+          },
+          502,
+        );
+      }
 
       const shouldTryNextModel =
         (geminiResponse.status === 400 || geminiResponse.status === 404) &&

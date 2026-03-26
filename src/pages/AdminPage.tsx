@@ -123,7 +123,9 @@ interface ExtractedItem {
   modifiers?: ModifierGroup[];
 }
 
-const EXTRACTION_TIMEOUT_MS = 90_000;
+/** Storage uploads should fail fast; extraction can take longer (Gemini + model fallbacks on the server). */
+const UPLOAD_TIMEOUT_MS = 60_000;
+const EXTRACTION_INVOKE_TIMEOUT_MS = 180_000;
 
 const AdminPage = () => {
   const navigate = useNavigate();
@@ -171,10 +173,18 @@ const AdminPage = () => {
     try {
       console.info('[kiokitchen:extract] Storage upload started → bucket menu-images');
       const fileName = `menu-${Date.now()}.${file.name.split('.').pop()}`;
-      const { error: uploadError } = await supabase.storage.from('menu-images').upload(fileName, file, {
-        cacheControl: '3600',
-        upsert: false,
-      });
+      const { error: uploadError } = await Promise.race([
+        supabase.storage.from('menu-images').upload(fileName, file, {
+          cacheControl: '3600',
+          upsert: false,
+        }),
+        new Promise<never>((_, reject) =>
+          setTimeout(
+            () => reject(new Error(`Upload timed out after ${UPLOAD_TIMEOUT_MS / 1000} seconds`)),
+            UPLOAD_TIMEOUT_MS
+          )
+        ),
+      ]);
 
       if (uploadError) {
         console.error('[kiokitchen:extract] Upload failed:', uploadError);
@@ -186,23 +196,21 @@ const AdminPage = () => {
       const imageUrl = urlData.publicUrl;
       console.info('[kiokitchen:extract] Public imageUrl:', imageUrl);
 
-      const invokePromise = supabase.functions.invoke('extract-menu', { body: { imageUrl } });
-      const timeoutPromise = new Promise<never>((_, reject) =>
-        setTimeout(
-          () => reject(new Error(`Extraction timed out after ${EXTRACTION_TIMEOUT_MS / 1000} seconds`)),
-          EXTRACTION_TIMEOUT_MS
-        )
-      );
-
       console.info('[kiokitchen:extract] Invoking edge function extract-menu…');
-      const { data, error } = await Promise.race([invokePromise, timeoutPromise]);
+      const { data, error } = await supabase.functions.invoke('extract-menu', {
+        body: { imageUrl },
+        timeout: EXTRACTION_INVOKE_TIMEOUT_MS,
+      });
       console.info(
         '[kiokitchen:extract] extract-menu response received:',
         error ? `error: ${error.message}` : `ok, raw items=${Array.isArray(data?.items) ? data.items.length : 0}`
       );
 
       if (error) {
-        const detail = await formatEdgeFunctionFailure(error);
+        let detail = await formatEdgeFunctionFailure(error);
+        if (/\b404\b/.test(detail) || detail.toLowerCase().includes('not found')) {
+          detail += ' — deploy the function: supabase functions deploy extract-menu (project awryxczjacqrgjlctrjc)';
+        }
         console.error('[kiokitchen:extract] Extraction failed:', detail);
         throw new Error(`Extraction failed: ${detail}`);
       }

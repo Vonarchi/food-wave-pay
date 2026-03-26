@@ -12,6 +12,8 @@ supabase secrets set GOOGLE_GEMINI_API_KEY=your_key
 supabase functions deploy extract-menu
 ```
 
+Create the key in [Google AI Studio](https://aistudio.google.com/apikey). If Gemini returns **API_KEY_INVALID**, the secret is wrong, expired, or has whitespace—set a fresh key and redeploy.
+
 **Request:** `POST` with `{ "imageUrl": "https://..." }` (public URL of uploaded menu image)
 
 ---

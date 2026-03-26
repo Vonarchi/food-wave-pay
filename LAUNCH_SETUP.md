@@ -36,7 +36,10 @@ Get key from [Google AI Studio](https://aistudio.google.com/apikey)
 ### 3. Local / Vercel
 
 - Local: Create `.env` with `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY`
-- Vercel: Add same vars in Project Settings → Environment Variables
+- Vercel: Add the same vars in **Project → Settings → Environment Variables** and enable them for **Production** *and* **Preview** (Vite bakes them in at build time). If only one random `*.vercel.app` URL works, the others were usually built **without** these vars or before you added them—**Redeploy** Production and the `main` preview after saving.
+- Supabase **Auth → URL Configuration**: set **Site URL** to your primary public URL (e.g. `https://food-wave-pay-pgbf.vercel.app`). Under **Redirect URLs**, add at least:
+  - `https://food-wave-pay-pgbf.vercel.app/**`
+  - `https://*-joseph-miles-dyson.vercel.app/**` (wildcard previews on your Vercel team), or add each branch URL you use. Signup/login uses `emailRedirectTo: <origin>/onboarding`, so the **exact origin** must be allowed or auth will 400/422.
 
 ### 4. Vercel Deployment — Joseph Miles Dyson Account Only
 

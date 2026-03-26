@@ -23,26 +23,34 @@ const CheckoutPage = () => {
     setIsProcessing(true);
 
     try {
-      // Simulate payment processing
       await new Promise((resolve) => setTimeout(resolve, 2000));
 
-      // Create order in database
-      const order = await addOrder({
-        truckId,
-        items: [...items],
-        subtotal: getSubtotal(),
-        tax: getTax(),
-        total: getTotal(),
-        status: 'received',
-        customerName: customerName || undefined,
-      });
+      const order = await Promise.race([
+        addOrder({
+          truckId,
+          items: [...items],
+          subtotal: getSubtotal(),
+          tax: getTax(),
+          total: getTotal(),
+          status: 'received',
+          customerName: customerName || undefined,
+        }),
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error('Order submit timed out')), 25_000)
+        ),
+      ]);
 
       clearCart();
       toast.success('Order placed successfully!');
       navigate(`/confirmation/${order.id}`);
     } catch (error) {
       console.error('Error placing order:', error);
-      toast.error('Failed to place order. Please try again.');
+      toast.error(
+        error instanceof Error && error.message.includes('timed out')
+          ? 'Network timed out. Check your connection and try again.'
+          : 'Failed to place order. Please try again.'
+      );
+    } finally {
       setIsProcessing(false);
     }
   };

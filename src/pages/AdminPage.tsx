@@ -126,6 +126,8 @@ interface ExtractedItem {
 /** Storage uploads should fail fast; extraction can take longer (Gemini + model fallbacks on the server). */
 const UPLOAD_TIMEOUT_MS = 60_000;
 const EXTRACTION_INVOKE_TIMEOUT_MS = 180_000;
+/** Failsafe if any awaited step misbehaves and never settles (must exceed upload + invoke caps). */
+const PIPELINE_FAILSAFE_MS = UPLOAD_TIMEOUT_MS + EXTRACTION_INVOKE_TIMEOUT_MS + 15_000;
 
 const AdminPage = () => {
   const navigate = useNavigate();
@@ -159,6 +161,13 @@ const AdminPage = () => {
   const uploadAndProcess = async (file: File) => {
     setIsProcessing(true);
     setExtractedItems([]);
+
+    let failsafeCleared = false;
+    const failsafeId = window.setTimeout(() => {
+      failsafeCleared = true;
+      setIsProcessing(false);
+      toast.error('Menu extraction took too long and was stopped. Try again or use a smaller image.');
+    }, PIPELINE_FAILSAFE_MS);
 
     const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
     try {
@@ -247,7 +256,8 @@ const AdminPage = () => {
       const msg = error instanceof Error ? error.message : 'Failed to process menu';
       toast.error(msg);
     } finally {
-      setIsProcessing(false);
+      window.clearTimeout(failsafeId);
+      if (!failsafeCleared) setIsProcessing(false);
       console.info('[kiokitchen:extract] Loading state cleared (finally)');
     }
   };

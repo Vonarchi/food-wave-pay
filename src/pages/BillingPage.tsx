@@ -64,16 +64,18 @@ const BillingPage = () => {
       const { data, error } = await supabase.functions.invoke('create-checkout-session', {
         body: { returnUrl },
         headers: { Authorization: `Bearer ${session.access_token}` },
+        timeout: 30_000,
       });
       if (error) throw error;
       if (data?.url) {
         window.location.href = data.url;
-      } else {
-        toast.error('Checkout not configured. Add STRIPE_PRICE_ID to Supabase secrets.');
+        return;
       }
+      toast.error('Checkout not configured. Add STRIPE_PRICE_ID to Supabase secrets.');
     } catch (err) {
       console.error(err);
       toast.error(err instanceof Error ? err.message : 'Failed to start checkout');
+    } finally {
       setCheckoutLoading(false);
     }
   };

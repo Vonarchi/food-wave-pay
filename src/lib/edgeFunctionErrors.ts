@@ -1,7 +1,20 @@
 /**
  * Read status + body from a failed functions.invoke (Supabase hides details behind generic message).
  * Pass `invokeResponse` from the same `invoke()` result — some builds omit `error.context`.
+ *
+ * Response body reads are time-bounded so a stalled stream cannot block UI spinners forever.
  */
+const READ_BODY_MS = 8_000;
+
+function readResponseTextBounded(res: Response): Promise<string> {
+  return Promise.race([
+    res.text(),
+    new Promise<string>((_, reject) =>
+      setTimeout(() => reject(new Error('edge_error_body_timeout')), READ_BODY_MS)
+    ),
+  ]).catch(() => '');
+}
+
 export async function formatEdgeFunctionFailure(
   error: unknown,
   invokeResponse?: Response | null
@@ -13,9 +26,9 @@ export async function formatEdgeFunctionFailure(
   const status = res.status;
   let raw = '';
   try {
-    raw = await res.text();
+    raw = await readResponseTextBounded(res);
   } catch {
-    return `${status} ${res.statusText || ''}`.trim() || base;
+    return `[${status}] ${res.statusText || ''}`.trim() || base;
   }
 
   if (raw) {

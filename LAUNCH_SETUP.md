@@ -39,9 +39,30 @@ Get key from [Google AI Studio](https://aistudio.google.com/apikey)
 - Vercel: Add the same vars in **Project → Settings → Environment Variables** and enable them for **Production** *and* **Preview** (Vite bakes them in at build time). If only one random `*.vercel.app` URL works, the others were usually built **without** these vars or before you added them—**Redeploy** Production and the `main` preview after saving.
 - **Idle / ~10 min “everything spins slowly”:** The Supabase client refreshes access tokens over the network; an unbounded hang on `/auth/v1/*` can block other calls. This repo’s Supabase `fetch` uses **per-route timeouts** (short for auth, longer for storage/functions). If you still see stalls, check the Network tab for pending `token?grant_type=refresh_token` and any proxy/VPN blocking Supabase.
 
-- Supabase **Auth → URL Configuration**: set **Site URL** to your primary public URL (e.g. `https://food-wave-pay-pgbf.vercel.app`). Under **Redirect URLs**, add at least:
-  - `https://food-wave-pay-pgbf.vercel.app/**`
-  - `https://*-joseph-miles-dyson.vercel.app/**` (wildcard previews on your Vercel team), or add each branch URL you use. Signup/login uses `emailRedirectTo: <origin>/onboarding`, so the **exact origin** must be allowed or auth will 400/422.
+#### Only one of several Vercel URLs works (common with this project)
+
+You will often see **three** hostnames for the same app (example from the Joseph Miles Dyson team project):
+
+| URL | Typical role |
+|-----|----------------|
+| `https://food-wave-pay-pgbf.vercel.app` | **Production** deployment (default domain) |
+| `https://food-wave-pay-pgbf-git-main-joseph-miles-dyson.vercel.app` | **Preview** build for branch `main` |
+| `https://food-wave-pay-pgbf-<hash>-joseph-miles-dyson.vercel.app` | **Preview** for a specific git commit / PR |
+
+Each is a **separate build**. `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY` are embedded when that build runs. If **Production** is unchecked for those variables in Vercel, the short `…pgbf.vercel.app` build will point at empty/wrong Supabase and fail (blank API, spinners, or `ERR_NAME_NOT_RESOLVED` in Network). If an old **hash** preview was built before env vars existed, that URL stays broken until you **Redeploy** it.
+
+**Fix (do in order):**
+
+1. **Vercel → Settings → Environment Variables** — Edit each `VITE_*` variable and ensure **both** checkboxes are on: **Production** and **Preview** (and Development if you use `vercel dev`).
+2. **Redeploy everything you care about:** Deployments → open latest **Production** → ⋯ → **Redeploy**. Repeat for a broken preview, merge to `main`, or push a small commit so hash URLs get a fresh build.
+3. **Supabase → Authentication → URL Configuration:**
+   - **Site URL:** your canonical public URL (usually `https://food-wave-pay-pgbf.vercel.app` once production is healthy).
+   - **Redirect URLs:** must cover every origin end users hit, otherwise login/signup/email links return **400/422**. Add at least:
+     - `https://food-wave-pay-pgbf.vercel.app/**`
+     - `https://food-wave-pay-pgbf-git-main-joseph-miles-dyson.vercel.app/**`
+     - `https://*.vercel.app/**` — optional single wildcard if your Supabase project allows it (covers hash previews like `…-ienbmmkya-…`), **or** add each preview URL explicitly after it appears in Vercel.
+
+Signup uses `emailRedirectTo: <current origin>/onboarding`, so **the tab’s origin must appear in Redirect URLs.**
 
 ### 4. Vercel Deployment — Joseph Miles Dyson Account Only
 

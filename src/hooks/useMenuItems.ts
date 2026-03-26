@@ -94,6 +94,38 @@ export const useMenuItems = (truckId: string): UseMenuItemsResult => {
       try {
         console.info("[useMenuItems] fetch start", { truckId });
 
+        // Reserved slug: "Try Demo" must always show built-in sample data. Otherwise any admin
+        // who saves menu_items with truck_id=demo would replace the public demo for everyone.
+        if (truckId === 'demo') {
+          const truckResult = await withTimeout(
+            supabase
+              .from('food_trucks' as any)
+              .select('*')
+              .eq('slug', 'demo')
+              .maybeSingle(),
+            MENU_FETCH_TIMEOUT_MS,
+            "menu_fetch"
+          );
+          const t = truckResult.data as Record<string, unknown> | null;
+          if (t) {
+            setTruckInfo({
+              name: t.name as string,
+              description: (t.description as string) || '',
+              location: (t.location as string) || 'Food Truck Row',
+              hours: (t.hours as string) || '11am - 8pm',
+              logo_url: (t.logo_url as string) || undefined,
+              cover_image_url: (t.cover_image_url as string) || undefined,
+              accent_color: (t.accent_color as string) || undefined,
+            });
+          } else {
+            setTruckInfo(null);
+          }
+          setItems(sampleFoodTruck.menu);
+          setUsingFallback(false);
+          setMenuNotLive(false);
+          return;
+        }
+
         // Fetch truck info and menu items in parallel — bounded so prod network stalls cannot spin forever.
         const [truckResult, menuResult] = await withTimeout(
           Promise.all([
@@ -117,8 +149,7 @@ export const useMenuItems = (truckId: string): UseMenuItemsResult => {
 
         const t = truckResult.data as Record<string, unknown> | null;
         const slug = (t?.slug as string) || truckId;
-        const isPublished =
-          slug === 'demo' || Boolean(t?.is_published);
+        const isPublished = Boolean(t?.is_published);
 
         // Set truck info
         if (t) {
@@ -141,10 +172,6 @@ export const useMenuItems = (truckId: string): UseMenuItemsResult => {
         if (menuResult.data && menuResult.data.length > 0) {
           setItems(menuResult.data.map(mapDbItemToMenuItem));
           setUsingFallback(false);
-          setMenuNotLive(false);
-        } else if (slug === 'demo') {
-          setItems(sampleFoodTruck.menu);
-          setUsingFallback(true);
           setMenuNotLive(false);
         } else if (!isPublished) {
           setItems([]);

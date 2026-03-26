@@ -304,6 +304,13 @@ const AdminPage = () => {
   ].sort((a, b) => a.localeCompare(b));
 
   const saveSelectedItems = async () => {
+    if (truckId.trim() === 'demo') {
+      toast.error(
+        'The slug "demo" is reserved for the built-in sample menu. Change Food Truck ID to your restaurant slug before saving items.'
+      );
+      return;
+    }
+
     const selectedItems = extractedItems.filter((item) => item.selected && item.name);
 
     if (selectedItems.length === 0) {

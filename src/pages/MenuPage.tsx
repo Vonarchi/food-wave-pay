@@ -1,7 +1,8 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { MenuItem } from '@/types';
 import { useMenuItems } from '@/hooks/useMenuItems';
+import { useCartStore } from '@/store/useStore';
 import { CategoryTabs } from '@/components/menu/CategoryTabs';
 import { MenuItemCard } from '@/components/menu/MenuItemCard';
 import { ItemCustomizer } from '@/components/menu/ItemCustomizer';
@@ -31,10 +32,24 @@ const MenuPage = () => {
     menuNotLive,
   } = useMenuItems(truckId);
 
+  const clearCart = useCartStore((s) => s.clearCart);
+  const prevTruckIdRef = useRef<string | undefined>(undefined);
+
   const [activeCategory, setActiveCategory] = useState<string>('');
   const [selectedItem, setSelectedItem] = useState<MenuItem | null>(null);
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [loadingStuck, setLoadingStuck] = useState(false);
+
+  // Switching trucks (e.g. Try Demo after browsing another menu) must not keep the old cart or UI state.
+  useEffect(() => {
+    if (prevTruckIdRef.current !== undefined && prevTruckIdRef.current !== truckId) {
+      clearCart();
+      setActiveCategory('');
+      setSelectedItem(null);
+      setIsCartOpen(false);
+    }
+    prevTruckIdRef.current = truckId;
+  }, [truckId, clearCart]);
 
   // Set initial category when categories load
   useEffect(() => {

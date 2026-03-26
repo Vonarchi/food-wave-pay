@@ -21,6 +21,9 @@ export type Database = {
           full_name: string | null
           phone: string | null
           restaurant_name: string | null
+          referral_code: string | null
+          referred_by: string | null
+          partner_id: string | null
           stripe_customer_id: string | null
           stripe_subscription_id: string | null
           subscription_status: string | null
@@ -95,6 +98,7 @@ export type Database = {
           hours: string | null
           id: string
           is_active: boolean
+          is_published: boolean
           location: string | null
           logo_url: string | null
           name: string
@@ -110,6 +114,7 @@ export type Database = {
           hours?: string | null
           id?: string
           is_active?: boolean
+          is_published?: boolean
           location?: string | null
           logo_url?: string | null
           name: string
@@ -125,6 +130,7 @@ export type Database = {
           hours?: string | null
           id?: string
           is_active?: boolean
+          is_published?: boolean
           location?: string | null
           logo_url?: string | null
           name?: string

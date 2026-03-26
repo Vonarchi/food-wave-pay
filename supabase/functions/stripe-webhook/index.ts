@@ -41,19 +41,23 @@ Deno.serve(async (req) => {
         const session = event.data.object as Stripe.Checkout.Session;
         const customerId = session.customer as string;
         const subscriptionId = session.subscription as string;
+        const metaUserId = session.metadata?.supabase_user_id;
 
-        // Get customer email to find profile
-        const customer = await stripe.customers.retrieve(customerId);
-        const email = (customer as Stripe.Customer).email;
-        if (!email) break;
+        let profileId: string | null = metaUserId ?? null;
 
-        const { data: profile } = await supabase
-          .from("profiles")
-          .select("id")
-          .eq("email", email)
-          .single();
+        if (!profileId) {
+          const customer = await stripe.customers.retrieve(customerId);
+          const email = (customer as Stripe.Customer).email;
+          if (!email) break;
+          const { data: profile } = await supabase
+            .from("profiles")
+            .select("id")
+            .eq("email", email)
+            .single();
+          profileId = profile?.id ?? null;
+        }
 
-        if (profile) {
+        if (profileId) {
           await supabase
             .from("profiles")
             .update({
@@ -61,8 +65,8 @@ Deno.serve(async (req) => {
               stripe_subscription_id: subscriptionId,
               subscription_status: "active",
             })
-            .eq("id", profile.id);
-          console.log(`Updated profile ${profile.id} with subscription`);
+            .eq("id", profileId);
+          console.log(`Updated profile ${profileId} with subscription`);
         }
         break;
       }
@@ -84,6 +88,25 @@ Deno.serve(async (req) => {
           .update({ subscription_status: status })
           .eq("stripe_subscription_id", subscription.id);
         console.log(`Updated subscription ${subscription.id} status: ${status}`);
+
+        if (status !== "active") {
+          let ownerId = subscription.metadata?.supabase_user_id ?? null;
+          if (!ownerId) {
+            const { data: prof } = await supabase
+              .from("profiles")
+              .select("id")
+              .eq("stripe_subscription_id", subscription.id)
+              .maybeSingle();
+            ownerId = prof?.id ?? null;
+          }
+          if (ownerId) {
+            await supabase
+              .from("food_trucks")
+              .update({ is_published: false })
+              .eq("owner_id", ownerId);
+            console.log(`Unpublished trucks for owner ${ownerId}`);
+          }
+        }
         break;
       }
 

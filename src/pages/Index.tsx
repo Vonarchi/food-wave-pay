@@ -37,6 +37,7 @@ const Index = () => {
             .from('food_trucks')
             .select('slug, name, description, logo_url, accent_color, location')
             .eq('is_active', true)
+            .or('slug.eq.demo,is_published.eq.true')
             .order('name'),
           timeoutPromise,
         ]);

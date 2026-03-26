@@ -13,6 +13,7 @@ interface Profile {
   full_name: string | null;
   phone: string | null;
   restaurant_name: string | null;
+  subscription_status: string | null;
 }
 
 interface AuthContextType {
@@ -21,6 +22,7 @@ interface AuthContextType {
   profile: Profile | null;
   loading: boolean;
   error: string | null;
+  refreshProfile: () => Promise<void>;
   signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
   signUp: (
     email: string,
@@ -67,7 +69,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const res = await Promise.race([
         supabase
           .from('profiles')
-          .select('id, email, full_name, phone, restaurant_name')
+          .select('id, email, full_name, phone, restaurant_name, subscription_status')
           .eq('id', userId)
           .single(),
         new Promise<'profile_fetch_timeout'>((resolve) => setTimeout(() => resolve('profile_fetch_timeout'), 8000)),
@@ -87,6 +89,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setProfile(null);
     }
   }, []);
+
+  const refreshProfile = useCallback(async () => {
+    const uid = user?.id;
+    if (uid) await fetchProfile(uid);
+  }, [user?.id, fetchProfile]);
 
   useEffect(() => {
     let done = false;
@@ -238,6 +245,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         profile,
         loading,
         error,
+        refreshProfile,
         signIn,
         signUp,
         signOut,

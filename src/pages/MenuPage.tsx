@@ -8,7 +8,7 @@ import { ItemCustomizer } from '@/components/menu/ItemCustomizer';
 import { CartButton } from '@/components/cart/CartButton';
 import { CartDrawer } from '@/components/cart/CartDrawer';
 import { motion, AnimatePresence } from 'framer-motion';
-import { MapPin, Clock, Loader2, ArrowLeft, AlertTriangle } from 'lucide-react';
+import { MapPin, Clock, Loader2, ArrowLeft, AlertTriangle, Lock } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 const LOADING_STUCK_AFTER_MS = 18_000;
@@ -28,6 +28,7 @@ const MenuPage = () => {
     isLoading,
     error,
     usingFallback,
+    menuNotLive,
   } = useMenuItems(truckId);
 
   const [activeCategory, setActiveCategory] = useState<string>('');
@@ -82,6 +83,34 @@ const MenuPage = () => {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center p-4">
         <Loader2 className="w-8 h-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  if (menuNotLive) {
+    return (
+      <div className="min-h-screen bg-background flex flex-col">
+        <header className="border-b border-border px-4 py-3 safe-top">
+          <div className="max-w-lg mx-auto flex items-center gap-3">
+            <Button variant="ghost" size="icon" onClick={() => navigate('/')}>
+              <ArrowLeft className="w-5 h-5" />
+            </Button>
+            <span className="font-semibold text-foreground truncate">{truckName}</span>
+          </div>
+        </header>
+        <div className="flex-1 flex items-center justify-center p-6">
+          <div className="max-w-md rounded-2xl border border-border bg-card p-8 text-center shadow-sm">
+            <Lock className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
+            <h1 className="text-xl font-semibold text-foreground">This menu isn&apos;t public yet</h1>
+            <p className="mt-3 text-sm text-muted-foreground">
+              The restaurant finishes onboarding with a subscription, then publishes from Menu Admin. Check back
+              soon or browse other restaurants from the home page.
+            </p>
+            <Button className="mt-6" onClick={() => navigate('/')}>
+              Back to home
+            </Button>
+          </div>
+        </div>
       </div>
     );
   }

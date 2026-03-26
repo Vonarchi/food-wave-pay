@@ -36,6 +36,8 @@ interface UseMenuItemsResult {
   error: string | null;
   /** True when showing sample data (empty DB, error, or timeout). */
   usingFallback: boolean;
+  /** True when the truck exists but is not published (paywall — not public yet). */
+  menuNotLive: boolean;
 }
 
 const mapDbItemToMenuItem = (row: {
@@ -72,6 +74,7 @@ export const useMenuItems = (truckId: string): UseMenuItemsResult => {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [usingFallback, setUsingFallback] = useState(false);
+  const [menuNotLive, setMenuNotLive] = useState(false);
   const [truckInfo, setTruckInfo] = useState<{
     name: string;
     description: string;
@@ -86,6 +89,7 @@ export const useMenuItems = (truckId: string): UseMenuItemsResult => {
     const fetchData = async () => {
       setIsLoading(true);
       setError(null);
+      setMenuNotLive(false);
 
       try {
         console.info("[useMenuItems] fetch start", { truckId });
@@ -111,18 +115,24 @@ export const useMenuItems = (truckId: string): UseMenuItemsResult => {
 
         console.info("[useMenuItems] fetch ok", { truckId });
 
+        const t = truckResult.data as Record<string, unknown> | null;
+        const slug = (t?.slug as string) || truckId;
+        const isPublished =
+          slug === 'demo' || Boolean(t?.is_published);
+
         // Set truck info
-        if (truckResult.data) {
-          const t = truckResult.data as any;
+        if (t) {
           setTruckInfo({
-            name: t.name,
-            description: t.description || '',
-            location: t.location || 'Food Truck Row',
-            hours: t.hours || '11am - 8pm',
-            logo_url: t.logo_url || undefined,
-            cover_image_url: t.cover_image_url || undefined,
-            accent_color: t.accent_color || undefined,
+            name: t.name as string,
+            description: (t.description as string) || '',
+            location: (t.location as string) || 'Food Truck Row',
+            hours: (t.hours as string) || '11am - 8pm',
+            logo_url: (t.logo_url as string) || undefined,
+            cover_image_url: (t.cover_image_url as string) || undefined,
+            accent_color: (t.accent_color as string) || undefined,
           });
+        } else {
+          setTruckInfo(null);
         }
 
         // Set menu items
@@ -131,9 +141,19 @@ export const useMenuItems = (truckId: string): UseMenuItemsResult => {
         if (menuResult.data && menuResult.data.length > 0) {
           setItems(menuResult.data.map(mapDbItemToMenuItem));
           setUsingFallback(false);
-        } else {
+          setMenuNotLive(false);
+        } else if (slug === 'demo') {
           setItems(sampleFoodTruck.menu);
           setUsingFallback(true);
+          setMenuNotLive(false);
+        } else if (!isPublished) {
+          setItems([]);
+          setUsingFallback(false);
+          setMenuNotLive(true);
+        } else {
+          setItems([]);
+          setUsingFallback(false);
+          setMenuNotLive(false);
         }
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
@@ -145,6 +165,7 @@ export const useMenuItems = (truckId: string): UseMenuItemsResult => {
         );
         setItems(sampleFoodTruck.menu);
         setUsingFallback(true);
+        setMenuNotLive(false);
       } finally {
         setIsLoading(false);
       }
@@ -153,11 +174,16 @@ export const useMenuItems = (truckId: string): UseMenuItemsResult => {
     fetchData();
   }, [truckId]);
 
-  const categories = usingFallback
-    ? sampleFoodTruck.categories
-    : [...new Set(items.map((i) => i.category))];
+  const categories =
+    menuNotLive
+      ? []
+      : usingFallback
+        ? sampleFoodTruck.categories
+        : [...new Set(items.map((i) => i.category))];
 
-  const truckName = truckInfo?.name || (usingFallback ? sampleFoodTruck.name : 'Smackin Jacks');
+  const truckName =
+    truckInfo?.name ||
+    (usingFallback ? sampleFoodTruck.name : menuNotLive ? truckId : 'Smackin Jacks');
   const truckDescription = truckInfo?.description || (usingFallback ? sampleFoodTruck.description : 'Order fresh food, made to order');
   const truckLocation = truckInfo?.location || 'Food Truck Row';
   const truckHours = truckInfo?.hours || '11am - 8pm';
@@ -175,5 +201,6 @@ export const useMenuItems = (truckId: string): UseMenuItemsResult => {
     isLoading,
     error,
     usingFallback,
+    menuNotLive,
   };
 };

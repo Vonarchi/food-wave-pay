@@ -20,6 +20,7 @@
    - `supabase/migrations/20260304154503_*.sql`
    - `supabase/migrations/20260304163235_*.sql`
    - `supabase/migrations/20260321000000_auth_and_ownership.sql`
+   - `supabase/migrations/20260325120000_menu_publish_paywall.sql` (published menus + paywall RLS)
 3. Or run the consolidated `schema.sql` on a fresh project (then run the auth migration)
 4. Enable Email auth in Supabase Auth settings
 5. Add site URL and redirect URLs for auth
@@ -82,7 +83,7 @@ vercel --prod   # Deploy
 
 ## What’s Mocked / Placeholder
 
-- **Stripe**: Billing page is a placeholder. No checkout, webhooks, or subscription logic.
+- **Stripe**: Checkout (`create-checkout-session`) and webhooks (`stripe-webhook`) are wired; ensure Edge secrets **`STRIPE_SECRET_KEY`**, **`STRIPE_PRICE_ID`**, **`STRIPE_WEBHOOK_SECRET`** and deployed functions. Owners **Subscribe** on `/admin/billing`, return to **Menu Admin** to **Publish**. Unpublished menus are hidden from the public directory and guest menu URLs until published; subscription lapse **unpublishes** via webhook.
 - **Customer payment**: Checkout shows payment UI but does not charge; order is submitted and sent to kitchen.
 - **notification.mp3**: KitchenDisplay references `/notification.mp3`; add to `public/` if you want sounds.
 

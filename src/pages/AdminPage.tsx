@@ -1,12 +1,13 @@
 import { useState, useRef, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { formatEdgeFunctionFailure } from '@/lib/edgeFunctionErrors';
+import { isPaidSubscriptionActive } from '@/lib/subscription';
 import { mapApiModifiersToApp, normalizeExtractionPayload } from '@/lib/menuExtraction';
 import { Button } from '@/components/ui/button';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Camera, Upload, ArrowLeft, Trash2, Check, Loader2, ImageIcon, Plus, Edit2, Image as ImageIconLucide, QrCode, Download, Settings2, LogOut, CreditCard } from 'lucide-react';
+import { Camera, Upload, ArrowLeft, Trash2, Check, Loader2, ImageIcon, Plus, Edit2, Image as ImageIconLucide, QrCode, Download, Settings2, LogOut, CreditCard, Globe } from 'lucide-react';
 import { toast } from 'sonner';
 import { QRCodeSVG } from 'qrcode.react';
 import { ModifierEditor } from '@/components/admin/ModifierEditor';
@@ -141,7 +142,8 @@ const PIPELINE_FAILSAFE_MS = UPLOAD_TIMEOUT_MS + EXTRACTION_INVOKE_TIMEOUT_MS + 
 
 const AdminPage = () => {
   const navigate = useNavigate();
-  const { user, signOut } = useAuth();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const { user, signOut, profile, refreshProfile } = useAuth();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
 
@@ -376,18 +378,68 @@ const AdminPage = () => {
   }, [user?.id]);
 
   const [truckBranding, setTruckBranding] = useState<{ logo_url?: string; accent_color?: string }>({});
+  const [truckPublished, setTruckPublished] = useState(false);
+  const [publishBusy, setPublishBusy] = useState(false);
+
+  useEffect(() => {
+    if (searchParams.get('checkout') !== 'success') return;
+    void (async () => {
+      await refreshProfile();
+      toast.success('Subscription updated — you can publish your menu.');
+    })();
+    const next = new URLSearchParams(searchParams);
+    next.delete('checkout');
+    setSearchParams(next, { replace: true });
+  }, [searchParams, setSearchParams, refreshProfile]);
 
   useEffect(() => {
     const fetchTruck = async () => {
       const { data } = await supabase
         .from('food_trucks')
-        .select('logo_url, accent_color')
+        .select('logo_url, accent_color, is_published')
         .eq('slug', truckId)
         .maybeSingle();
-      setTruckBranding({ logo_url: (data as any)?.logo_url, accent_color: (data as any)?.accent_color });
+      const row = data as { logo_url?: string; accent_color?: string; is_published?: boolean } | null;
+      setTruckBranding({ logo_url: row?.logo_url, accent_color: row?.accent_color });
+      setTruckPublished(Boolean(row?.is_published));
     };
     fetchTruck();
   }, [truckId]);
+
+  const handlePublishMenu = async () => {
+    if (!isPaidSubscriptionActive(profile?.subscription_status)) {
+      toast.error('Subscribe first to publish your menu.');
+      navigate('/admin/billing');
+      return;
+    }
+    setPublishBusy(true);
+    try {
+      const { error } = await supabase.from('food_trucks').update({ is_published: true }).eq('slug', truckId);
+      if (error) throw error;
+      setTruckPublished(true);
+      toast.success('Menu is live — customers can order from your links and the home page.');
+    } catch (e) {
+      console.error(e);
+      toast.error(e instanceof Error ? e.message : 'Could not publish');
+    } finally {
+      setPublishBusy(false);
+    }
+  };
+
+  const handleUnpublishMenu = async () => {
+    setPublishBusy(true);
+    try {
+      const { error } = await supabase.from('food_trucks').update({ is_published: false }).eq('slug', truckId);
+      if (error) throw error;
+      setTruckPublished(false);
+      toast.success('Menu is no longer public.');
+    } catch (e) {
+      console.error(e);
+      toast.error(e instanceof Error ? e.message : 'Could not unpublish');
+    } finally {
+      setPublishBusy(false);
+    }
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -517,6 +569,60 @@ const AdminPage = () => {
             placeholder="Enter truck ID"
             className="w-full p-3 rounded-lg border border-border bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
           />
+        </motion.section>
+
+        {/* Publish & subscription gate */}
+        <motion.section
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="bg-card rounded-2xl border border-border p-6 space-y-4"
+        >
+          <div className="flex items-center gap-2">
+            <Globe className="w-5 h-5 text-primary" />
+            <h2 className="font-semibold text-foreground">Publish to customers</h2>
+          </div>
+          <p className="text-sm text-muted-foreground">
+            Until you publish, your menu stays private: it won&apos;t appear on the home page and ordering links
+            show a &quot;not public yet&quot; screen for guests.
+          </p>
+          {truckId === 'demo' ? (
+            <p className="text-sm text-amber-700 dark:text-amber-400 bg-amber-500/10 border border-amber-500/20 rounded-lg p-3">
+              Switch <strong>Food Truck ID</strong> to your restaurant slug before publishing. &quot;demo&quot; is the
+              shared sample truck.
+            </p>
+          ) : null}
+          {truckId === 'demo' ? null : truckPublished ? (
+            <div className="flex flex-col sm:flex-row gap-3 sm:items-center">
+              <p className="text-sm font-medium text-success">Your menu is live.</p>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={publishBusy}
+                onClick={() => void handleUnpublishMenu()}
+              >
+                Unpublish
+              </Button>
+            </div>
+          ) : !isPaidSubscriptionActive(profile?.subscription_status) ? (
+            <div className="flex flex-col sm:flex-row gap-3">
+              <Button
+                variant="cart"
+                disabled={publishBusy}
+                onClick={() => navigate('/admin/billing')}
+              >
+                <CreditCard className="w-4 h-4 mr-2" />
+                Subscribe to publish
+              </Button>
+              <p className="text-xs text-muted-foreground self-center">
+                Active subscription required to take orders on KioKitchen.
+              </p>
+            </div>
+          ) : (
+            <Button variant="cart" disabled={publishBusy} onClick={() => void handlePublishMenu()}>
+              {publishBusy ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
+              Publish menu
+            </Button>
+          )}
         </motion.section>
 
         {/* Branding Settings */}

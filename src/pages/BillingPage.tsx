@@ -62,7 +62,11 @@ const BillingPage = () => {
       }
       const returnUrl = window.location.origin;
       const { data, error } = await supabase.functions.invoke('create-checkout-session', {
-        body: { returnUrl },
+        body: {
+          returnUrl,
+          successPath: '/admin?checkout=success',
+          cancelPath: '/admin/billing',
+        },
         headers: { Authorization: `Bearer ${session.access_token}` },
         timeout: 30_000,
       });

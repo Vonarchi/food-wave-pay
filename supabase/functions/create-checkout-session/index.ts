@@ -56,8 +56,17 @@ Deno.serve(async (req) => {
 
     const body = await req.json().catch(() => ({}));
     const returnUrl = (body.returnUrl as string) || Deno.env.get("SITE_URL") || "http://localhost:5173";
-    const successUrl = `${returnUrl}/admin/billing?success=true`;
-    const cancelUrl = `${returnUrl}/admin/billing`;
+    const base = returnUrl.replace(/\/$/, "");
+    const successPath =
+      typeof body.successPath === "string" && body.successPath.startsWith("/")
+        ? body.successPath
+        : "/admin/billing?success=true";
+    const successUrl = `${base}${successPath}`;
+    const cancelPath =
+      typeof body.cancelPath === "string" && body.cancelPath.startsWith("/")
+        ? body.cancelPath
+        : "/admin/billing";
+    const cancelUrl = `${base}${cancelPath}`;
 
     const { data: profile } = await supabase
       .from("profiles")

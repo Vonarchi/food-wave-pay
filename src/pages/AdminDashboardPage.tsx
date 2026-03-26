@@ -1,20 +1,21 @@
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { motion } from 'framer-motion';
-import { 
-  ArrowLeft, 
-  QrCode, 
-  Smartphone, 
-  CreditCard, 
-  Database, 
-  ChefHat, 
-  Camera, 
+import {
+  ArrowLeft,
+  QrCode,
+  Smartphone,
+  CreditCard,
+  Database,
+  ChefHat,
+  Camera,
   ArrowRight,
-  Users,
   ShoppingCart,
   Bell,
   Settings,
-  ImageIcon
+  ImageIcon,
+  Globe,
+  Send,
 } from 'lucide-react';
 
 const AdminDashboardPage = () => {
@@ -35,7 +36,7 @@ const AdminDashboardPage = () => {
           </Button>
           <div>
             <h1 className="text-xl font-bold">System Overview</h1>
-            <p className="text-background/70 text-sm">Smackin Jacks Architecture</p>
+            <p className="text-background/70 text-sm">KioKitchen — product architecture</p>
           </div>
         </div>
       </header>
@@ -45,13 +46,14 @@ const AdminDashboardPage = () => {
         <motion.section
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          className="grid grid-cols-2 md:grid-cols-4 gap-4"
+          className="grid grid-cols-2 md:grid-cols-5 gap-3"
         >
           {[
             { label: 'Demo Menu', icon: Smartphone, path: '/menu/demo', color: 'bg-primary' },
             { label: 'Kitchen Display', icon: ChefHat, path: '/kitchen', color: 'bg-warning' },
             { label: 'Menu Admin', icon: Camera, path: '/admin', color: 'bg-success' },
-            { label: 'Home', icon: QrCode, path: '/', color: 'bg-accent' },
+            { label: 'Billing', icon: CreditCard, path: '/admin/billing', color: 'bg-accent' },
+            { label: 'Home', icon: QrCode, path: '/', color: 'bg-muted' },
           ].map((item) => (
             <Button
               key={item.label}
@@ -102,12 +104,11 @@ const AdminDashboardPage = () => {
                   color="bg-primary"
                 />
                 <FlowArrow />
-                <FlowNode 
-                  icon={<CreditCard className="w-6 h-6" />}
-                  label="Payment"
-                  sublabel="Stripe (TODO)"
-                  color="bg-muted"
-                  muted
+                <FlowNode
+                  icon={<Send className="w-6 h-6" />}
+                  label="Place order"
+                  sublabel="Order → kitchen queue"
+                  color="bg-primary"
                 />
                 <FlowArrow />
                 <FlowNode 
@@ -142,10 +143,17 @@ const AdminDashboardPage = () => {
                     color="bg-accent/80"
                     small
                   />
-                  <FlowNode 
+                  <FlowNode
                     icon={<span className="text-xs font-bold">menu</span>}
                     label="Menu Items"
                     sublabel="Product catalog"
+                    color="bg-accent/80"
+                    small
+                  />
+                  <FlowNode
+                    icon={<span className="text-xs font-bold">ft</span>}
+                    label="food_trucks"
+                    sublabel="is_published + owner"
                     color="bg-accent/80"
                     small
                   />
@@ -185,34 +193,50 @@ const AdminDashboardPage = () => {
 
             {/* Admin Flow */}
             <div>
-              <div className="text-sm font-medium text-success mb-4 uppercase tracking-wide">Admin Tools</div>
-              <div className="flex items-center gap-4">
-                <FlowNode 
+              <div className="text-sm font-medium text-success mb-4 uppercase tracking-wide">
+                Admin Tools (draft → paywall → live)
+              </div>
+              <div className="flex flex-wrap items-center gap-y-4 gap-x-0">
+                <FlowNode
                   icon={<Camera className="w-6 h-6" />}
                   label="Capture Menu"
                   sublabel="/admin"
                   color="bg-success"
                 />
                 <FlowArrow />
-                <FlowNode 
+                <FlowNode
                   icon={<ImageIcon className="w-6 h-6" />}
                   label="AI Extraction"
-                  sublabel="Gemini Vision"
+                  sublabel="Edge fn + Gemini"
                   color="bg-success"
                 />
                 <FlowArrow />
-                <FlowNode 
+                <FlowNode
                   icon={<Settings className="w-6 h-6" />}
                   label="Review & Edit"
                   sublabel="Verify items"
                   color="bg-success"
                 />
                 <FlowArrow />
-                <FlowNode 
+                <FlowNode
                   icon={<Database className="w-6 h-6" />}
                   label="Save to DB"
-                  sublabel="menu_items table"
+                  sublabel="menu_items"
                   color="bg-accent"
+                />
+                <FlowArrow />
+                <FlowNode
+                  icon={<CreditCard className="w-6 h-6" />}
+                  label="Subscribe"
+                  sublabel="Stripe Checkout"
+                  color="bg-primary"
+                />
+                <FlowArrow />
+                <FlowNode
+                  icon={<Globe className="w-6 h-6" />}
+                  label="Publish"
+                  sublabel="is_published"
+                  color="bg-success"
                 />
               </div>
             </div>
@@ -231,13 +255,14 @@ const AdminDashboardPage = () => {
             <h3 className="font-bold text-foreground mb-4">Pages & Routes</h3>
             <div className="space-y-3">
               {[
-                { path: '/', name: 'Home / Landing', desc: 'Marketing page with demo links' },
-                { path: '/menu/:truckId', name: 'Menu Page', desc: 'Customer-facing menu browser' },
-                { path: '/checkout/:truckId', name: 'Checkout Page', desc: 'Cart review & payment' },
+                { path: '/', name: 'Home / Landing', desc: 'Marketing + directory of published trucks' },
+                { path: '/menu/:truckId', name: 'Menu Page', desc: 'Customer menu (hidden until truck is published)' },
+                { path: '/checkout/:truckId', name: 'Checkout Page', desc: 'Cart review; order saved to Supabase' },
                 { path: '/confirmation/:orderId', name: 'Confirmation', desc: 'Order success & tracking' },
-                { path: '/kitchen', name: 'Kitchen Display', desc: 'Real-time order queue (KDS)' },
-                { path: '/admin', name: 'Menu Admin', desc: 'AI-powered menu capture' },
-                { path: '/admin/dashboard', name: 'System Overview', desc: 'This page - architecture view' },
+                { path: '/kitchen', name: 'Kitchen Display', desc: 'Realtime KDS (/dashboard/kitchen alias)' },
+                { path: '/admin', name: 'Menu Admin', desc: 'Capture, extract, save, subscribe, publish' },
+                { path: '/admin/billing', name: 'Billing', desc: 'Stripe subscription (gate for publishing)' },
+                { path: '/admin/dashboard', name: 'System Overview', desc: 'This page — architecture view' },
               ].map((page) => (
                 <div key={page.path} className="flex items-start gap-3">
                   <code className="text-xs bg-secondary px-2 py-1 rounded text-primary font-mono shrink-0">
@@ -269,7 +294,13 @@ const AdminDashboardPage = () => {
               <div>
                 <p className="text-sm font-medium text-foreground mb-2">Backend</p>
                 <div className="flex flex-wrap gap-2">
-                  {['PostgreSQL', 'Real-time Subscriptions', 'Edge Functions', 'Storage Buckets'].map((tech) => (
+                  {[
+                    'PostgreSQL',
+                    'Realtime',
+                    'Edge Functions',
+                    'Storage',
+                    'Stripe (Checkout + webhooks)',
+                  ].map((tech) => (
                     <span key={tech} className="text-xs bg-accent/10 text-accent px-2 py-1 rounded">
                       {tech}
                     </span>
@@ -308,7 +339,29 @@ const AdminDashboardPage = () => {
           className="bg-card rounded-2xl border border-border p-6"
         >
           <h3 className="font-bold text-foreground mb-4">Database Schema</h3>
-          <div className="grid md:grid-cols-2 gap-6">
+          <div className="grid md:grid-cols-3 gap-6">
+            <div className="bg-secondary/30 rounded-xl p-4">
+              <div className="flex items-center gap-2 mb-3">
+                <Database className="w-4 h-4 text-accent" />
+                <span className="font-mono text-sm font-bold text-foreground">food_trucks</span>
+              </div>
+              <div className="space-y-1 text-xs font-mono">
+                {[
+                  { name: 'slug', type: 'TEXT', key: true },
+                  { name: 'name', type: 'TEXT' },
+                  { name: 'owner_id', type: 'UUID?' },
+                  { name: 'is_active', type: 'BOOLEAN' },
+                  { name: 'is_published', type: 'BOOLEAN' },
+                  { name: 'logo_url', type: 'TEXT?' },
+                  { name: 'accent_color', type: 'TEXT?' },
+                ].map((col) => (
+                  <div key={col.name} className="flex justify-between gap-2">
+                    <span className={col.key ? 'text-primary' : 'text-foreground'}>{col.name}</span>
+                    <span className="text-muted-foreground shrink-0">{col.type}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
             <div className="bg-secondary/30 rounded-xl p-4">
               <div className="flex items-center gap-2 mb-3">
                 <Database className="w-4 h-4 text-accent" />
@@ -327,9 +380,9 @@ const AdminDashboardPage = () => {
                   { name: 'status', type: 'TEXT' },
                   { name: 'created_at', type: 'TIMESTAMPTZ' },
                 ].map((col) => (
-                  <div key={col.name} className="flex justify-between">
+                  <div key={col.name} className="flex justify-between gap-2">
                     <span className={col.key ? 'text-primary' : 'text-foreground'}>{col.name}</span>
-                    <span className="text-muted-foreground">{col.type}</span>
+                    <span className="text-muted-foreground shrink-0">{col.type}</span>
                   </div>
                 ))}
               </div>
@@ -352,9 +405,9 @@ const AdminDashboardPage = () => {
                   { name: 'modifiers', type: 'JSONB' },
                   { name: 'created_at', type: 'TIMESTAMPTZ' },
                 ].map((col) => (
-                  <div key={col.name} className="flex justify-between">
+                  <div key={col.name} className="flex justify-between gap-2">
                     <span className={col.key ? 'text-primary' : 'text-foreground'}>{col.name}</span>
-                    <span className="text-muted-foreground">{col.type}</span>
+                    <span className="text-muted-foreground shrink-0">{col.type}</span>
                   </div>
                 ))}
               </div>

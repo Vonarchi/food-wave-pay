@@ -41,14 +41,54 @@ if (!SUPABASE_URL || !SUPABASE_PUBLISHABLE_KEY) {
   }
 }
 
-// Custom fetch to prevent 304 caching — auth can hang when responses are cached.
-// Must preserve Authorization/apikey: spreading Headers fails, use Headers constructor.
-const noCacheFetch = (url: RequestInfo | URL, init?: RequestInit) => {
+function mergeAbortSignals(signals: AbortSignal[]): AbortSignal {
+  const combined = new AbortController();
+  const onAbort = () => combined.abort();
+  for (const s of signals) {
+    if (s.aborted) {
+      combined.abort();
+      return combined.signal;
+    }
+    s.addEventListener("abort", onAbort, { once: true });
+  }
+  return combined.signal;
+}
+
+/**
+ * Hard deadlines per request class so a hung TCP refresh cannot wedge every button after idle
+ * (GoTrue runs token refresh inside a lock; one stuck `/auth/v1/token` blocks getSession & REST).
+ * Auth-js JWKS cache TTL is 10m — stalls around that time often trace to unbounded fetch waits.
+ */
+function supabaseFetch(url: RequestInfo | URL, init?: RequestInit): Promise<Response> {
   const headers = new Headers(init?.headers);
   headers.set("Cache-Control", "no-cache");
   headers.set("Pragma", "no-cache");
-  return fetch(url, { ...init, cache: "no-store", headers });
-};
+
+  const href =
+    typeof url === "string"
+      ? url
+      : url instanceof Request
+        ? url.url
+        : url.href;
+
+  let deadlineMs = 55_000;
+  if (href.includes("/auth/v1/")) {
+    deadlineMs = 28_000;
+  } else if (href.includes("/storage/v1/object/") && (init?.method === "POST" || init?.method === "PUT")) {
+    deadlineMs = 120_000;
+  } else if (href.includes("/functions/v1/")) {
+    deadlineMs = 185_000;
+  }
+
+  const timeoutCtl = new AbortController();
+  const timer = globalThis.setTimeout(() => timeoutCtl.abort(), deadlineMs);
+  const nextSignal =
+    init?.signal != null ? mergeAbortSignals([init.signal, timeoutCtl.signal]) : timeoutCtl.signal;
+
+  return fetch(url, { ...init, headers, cache: "no-store", signal: nextSignal }).finally(() =>
+    globalThis.clearTimeout(timer)
+  );
+}
 
 // Bypass navigator.locks — can deadlock and cause getSession to hang indefinitely
 const noopLock = async <R>(_name: string, _acquireTimeout: number, fn: () => Promise<R>) => fn();
@@ -61,6 +101,6 @@ export const supabase = createClient<Database>(SUPABASE_URL || "", SUPABASE_PUBL
     lock: noopLock,
   },
   global: {
-    fetch: noCacheFetch,
+    fetch: supabaseFetch,
   },
 });

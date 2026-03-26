@@ -22,7 +22,7 @@ const LoginPage = () => {
     try {
       const { error } = await signIn(email, password);
       console.info("[sign-in] submit finished", { hasError: Boolean(error) });
-      if (!error) navigate('/admin');
+      if (!error) navigate('/admin', { replace: true });
     } finally {
       setIsSubmitting(false);
     }

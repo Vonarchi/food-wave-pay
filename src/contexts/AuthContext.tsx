@@ -48,6 +48,10 @@ function formatAuthFailure(message: string) {
     return `Auth request failed while calling ${host}. Supabase URL is present in this build. Check the browser Network tab for the exact /auth/v1/* failure before changing Vercel env vars.`;
   }
 
+  if (/redirect|redirect_uri|email link/i.test(message)) {
+    return `${message} — In Supabase → Authentication → URL Configuration, add this site origin to Redirect URLs (e.g. https://your-app.vercel.app/**).`;
+  }
+
   return message;
 }
 
@@ -140,19 +144,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setError(null);
     console.info("[sign-in] attempting signInWithPassword");
     try {
-      const { error } = await Promise.race([
+      const { data, error } = await Promise.race([
         supabase.auth.signInWithPassword({ email, password }),
         new Promise<never>((_, reject) =>
-          setTimeout(() => reject(new Error("Request timed out")), 15000)
+          setTimeout(() => reject(new Error("Request timed out")), 20_000)
         ),
       ]);
       if (error) {
         console.warn("[sign-in] supabase error:", error.message);
         setError(error.message);
-      } else {
-        console.info("[sign-in] success");
+        return { error };
       }
-      return { error };
+      // Apply session immediately so /admin doesn't render before onAuthStateChange (avoids redirect loop / stuck guard).
+      if (data.session) {
+        setSession(data.session);
+        setUser(data.session.user);
+        void fetchProfile(data.session.user.id);
+      }
+      console.info("[sign-in] success");
+      return { error: null };
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Login failed";
       console.warn("[sign-in] failed:", msg);
@@ -178,16 +188,29 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       },
     });
 
-    // 10s timeout — prevents infinite spinner if Supabase unreachable
-    const timeoutPromise = new Promise<{ error: { message: string } }>((_, reject) =>
-      setTimeout(() => reject(new Error("Request timed out. Check Supabase URL in Auth settings and project status.")), 10000)
+    const timeoutPromise = new Promise<never>((_, reject) =>
+      setTimeout(
+        () => reject(new Error("Request timed out. Check Supabase URL in Auth settings and project status.")),
+        20_000
+      )
     );
 
     try {
       const { data, error } = await Promise.race([signUpPromise, timeoutPromise]);
-      if (error) setError(error.message);
+      if (error) {
+        setError(error.message);
+        return {
+          error,
+          needsEmailConfirmation: false,
+        };
+      }
+      if (data.session && data.user) {
+        setSession(data.session);
+        setUser(data.user);
+        void fetchProfile(data.user.id);
+      }
       return {
-        error,
+        error: null,
         needsEmailConfirmation: Boolean(data?.user && !data?.session),
       };
     } catch (err) {

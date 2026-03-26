@@ -39,7 +39,7 @@ const SignupPage = () => {
           setSuccessMessage('Check your email to confirm your account, then sign in to continue onboarding.');
           return;
         }
-        navigate('/onboarding');
+        navigate('/onboarding', { replace: true });
       }
     } finally {
       setIsSubmitting(false); // Always stop spinner

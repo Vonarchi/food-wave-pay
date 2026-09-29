@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
@@ -6,6 +6,9 @@ import { motion } from 'framer-motion';
 import { Loader2 } from 'lucide-react';
 import { SupabaseEnvBanner } from '@/components/SupabaseEnvBanner';
 import { ConnectivityErrorHint } from '@/components/ConnectivityErrorHint';
+import { track } from '@/lib/analytics';
+import { readCampaign } from '@/lib/commerce';
+import { supabase } from '@/integrations/supabase/client';
 
 const SignupPage = () => {
   const navigate = useNavigate();
@@ -16,6 +19,16 @@ const SignupPage = () => {
   const [fullName, setFullName] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    track('signup_started');
+    const campaign = readCampaign(window.location.search) ?? sessionStorage.getItem('kk-campaign');
+    if (!campaign || !readCampaign(`?campaign=${campaign}`)) return;
+    sessionStorage.setItem('kk-campaign', campaign);
+    void supabase.from('campaign_visits').insert({ campaign, event_name: 'visit' }).then(({ error: visitError }) => {
+      if (visitError) console.warn('[campaign]', visitError.message);
+    });
+  }, []);
 
   // Capture referral params from URL (future partner tracking)
   const referralCode = searchParams.get('ref') || searchParams.get('referral_code') || undefined;
@@ -35,6 +48,11 @@ const SignupPage = () => {
         partnerId,
       });
       if (!error) {
+        track('signup_completed');
+        const campaign = sessionStorage.getItem('kk-campaign');
+        if (campaign && readCampaign(`?campaign=${campaign}`)) {
+          void supabase.from('campaign_visits').insert({ campaign, event_name: 'signup' });
+        }
         if (needsEmailConfirmation) {
           setSuccessMessage('Check your email to confirm your account, then sign in to continue onboarding.');
           return;
@@ -57,11 +75,11 @@ const SignupPage = () => {
           <SupabaseEnvBanner />
           <div className="text-center mb-8">
             <img
-              src="/logo.png"
+              src="/logo.png?v=3"
               alt="KioKitchen"
-              className="h-14 w-auto mx-auto mb-4 object-contain"
-              width={56}
-              height={56}
+              className="h-32 w-auto mx-auto mb-4 object-contain"
+              width={640}
+              height={320}
             />
             <h1 className="text-2xl font-bold text-foreground">Create Account</h1>
             <p className="text-muted-foreground mt-1">Start your restaurant ordering setup</p>

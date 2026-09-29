@@ -27,6 +27,8 @@ export type Database = {
           stripe_customer_id: string | null
           stripe_subscription_id: string | null
           subscription_status: string | null
+          plan_code: string
+          is_platform_admin: boolean
           created_at: string
           updated_at: string
         }
@@ -92,6 +94,7 @@ export type Database = {
       food_trucks: {
         Row: {
           accent_color: string | null
+          business_type: string | null
           cover_image_url: string | null
           created_at: string
           description: string | null
@@ -101,13 +104,44 @@ export type Database = {
           is_published: boolean
           location: string | null
           logo_url: string | null
+          menu_status: string
           name: string
-          slug: string
           owner_id: string | null
+          phone: string | null
+          phone_accept_orders: boolean
+          phone_fallback_number: string | null
+          phone_greeting: string | null
+          phone_hours: string | null
+          phone_language: string
+          phone_ordering_enabled: boolean
+          phone_pay_at_pickup: boolean
+          phone_payment_link_enabled: boolean
+          phone_prep_minutes: number | null
+          phone_speak_prices: boolean
+          ordering_phone_number: string | null
+          drive_thru_enabled: boolean
+          organization_id: string | null
+          ordering_paused: boolean
+          test_mode: boolean
+          require_payment_before_kitchen: boolean
+          pay_at_pickup_enabled: boolean
+          menu_source: string
+          order_route: string
+          default_language: string
+          stripe_account_id: string | null
+          card_payments_enabled: boolean
+          published_at: string | null
+          slug: string
+          spoken_responses_enabled: boolean
           updated_at: string
+          upsells_enabled: boolean
+          voice_greeting: string | null
+          voice_ordering_enabled: boolean
+          website: string | null
         }
         Insert: {
           accent_color?: string | null
+          business_type?: string | null
           cover_image_url?: string | null
           created_at?: string
           description?: string | null
@@ -117,13 +151,44 @@ export type Database = {
           is_published?: boolean
           location?: string | null
           logo_url?: string | null
+          menu_status?: string
           name: string
-          slug: string
           owner_id?: string | null
+          phone?: string | null
+          phone_accept_orders?: boolean
+          phone_fallback_number?: string | null
+          phone_greeting?: string | null
+          phone_hours?: string | null
+          phone_language?: string
+          phone_ordering_enabled?: boolean
+          phone_pay_at_pickup?: boolean
+          phone_payment_link_enabled?: boolean
+          phone_prep_minutes?: number | null
+          phone_speak_prices?: boolean
+          ordering_phone_number?: string | null
+          drive_thru_enabled?: boolean
+          organization_id?: string | null
+          ordering_paused?: boolean
+          test_mode?: boolean
+          require_payment_before_kitchen?: boolean
+          pay_at_pickup_enabled?: boolean
+          menu_source?: string
+          order_route?: string
+          default_language?: string
+          stripe_account_id?: string | null
+          card_payments_enabled?: boolean
+          published_at?: string | null
+          slug: string
+          spoken_responses_enabled?: boolean
           updated_at?: string
+          upsells_enabled?: boolean
+          voice_greeting?: string | null
+          voice_ordering_enabled?: boolean
+          website?: string | null
         }
         Update: {
           accent_color?: string | null
+          business_type?: string | null
           cover_image_url?: string | null
           created_at?: string
           description?: string | null
@@ -133,10 +198,91 @@ export type Database = {
           is_published?: boolean
           location?: string | null
           logo_url?: string | null
+          menu_status?: string
           name?: string
-          slug?: string
           owner_id?: string | null
+          phone?: string | null
+          phone_accept_orders?: boolean
+          phone_fallback_number?: string | null
+          phone_greeting?: string | null
+          phone_hours?: string | null
+          phone_language?: string
+          phone_ordering_enabled?: boolean
+          phone_pay_at_pickup?: boolean
+          phone_payment_link_enabled?: boolean
+          phone_prep_minutes?: number | null
+          phone_speak_prices?: boolean
+          ordering_phone_number?: string | null
+          drive_thru_enabled?: boolean
+          organization_id?: string | null
+          ordering_paused?: boolean
+          test_mode?: boolean
+          require_payment_before_kitchen?: boolean
+          pay_at_pickup_enabled?: boolean
+          menu_source?: string
+          order_route?: string
+          default_language?: string
+          stripe_account_id?: string | null
+          card_payments_enabled?: boolean
+          published_at?: string | null
+          slug?: string
+          spoken_responses_enabled?: boolean
           updated_at?: string
+          upsells_enabled?: boolean
+          voice_greeting?: string | null
+          voice_ordering_enabled?: boolean
+          website?: string | null
+        }
+        Relationships: []
+      }
+      menu_upsells: {
+        Row: {
+          id: string
+          restaurant_slug: string
+          source_item_id: string
+          suggested_item_id: string
+          enabled: boolean
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          restaurant_slug: string
+          source_item_id: string
+          suggested_item_id: string
+          enabled?: boolean
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          restaurant_slug?: string
+          source_item_id?: string
+          suggested_item_id?: string
+          enabled?: boolean
+          created_at?: string
+        }
+        Relationships: []
+      }
+      product_events: {
+        Row: {
+          id: string
+          event_name: string
+          restaurant_slug: string | null
+          properties: Json
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          event_name: string
+          restaurant_slug?: string | null
+          properties?: Json
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          event_name?: string
+          restaurant_slug?: string | null
+          properties?: Json
+          created_at?: string
         }
         Relationships: []
       }
@@ -194,6 +340,13 @@ export type Database = {
           tax: number
           total: number
           truck_id: string
+          guest_access_token: string | null
+          payment_status: string
+          source: string
+          is_test: boolean
+          routing_status: string
+          payment_provider: string | null
+          idempotency_key: string | null
           updated_at: string
         }
         Insert: {
@@ -207,6 +360,11 @@ export type Database = {
           tax: number
           total: number
           truck_id: string
+          guest_access_token?: string | null
+          payment_status?: string
+          source?: string
+          is_test?: boolean
+          routing_status?: string
           updated_at?: string
         }
         Update: {
@@ -220,7 +378,127 @@ export type Database = {
           tax?: number
           total?: number
           truck_id?: string
+          guest_access_token?: string | null
+          payment_status?: string
+          source?: string
+          is_test?: boolean
+          routing_status?: string
+          payment_provider?: string | null
           updated_at?: string
+        }
+        Relationships: []
+      }
+      restaurant_staff: {
+        Row: {
+          id: string
+          user_id: string
+          restaurant_slug: string
+          role: string
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          restaurant_slug: string
+          role: string
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          restaurant_slug?: string
+          role?: string
+          created_at?: string
+        }
+        Relationships: []
+      }
+      pos_connections: {
+        Row: {
+          id: string
+          restaurant_slug: string
+          provider: string
+          status: string
+          external_account_id: string | null
+          external_location_id: string | null
+          last_health_at: string | null
+          last_error: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          restaurant_slug: string
+          provider: string
+          status?: string
+          external_account_id?: string | null
+          external_location_id?: string | null
+          last_health_at?: string | null
+          last_error?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          restaurant_slug?: string
+          provider?: string
+          status?: string
+          external_account_id?: string | null
+          external_location_id?: string | null
+          last_health_at?: string | null
+          last_error?: string | null
+          created_at?: string
+        }
+        Relationships: []
+      }
+      menu_translations: {
+        Row: {
+          id: string
+          restaurant_slug: string
+          entity_type: string
+          entity_id: string
+          field: string
+          locale: string
+          text: string
+        }
+        Insert: {
+          id?: string
+          restaurant_slug: string
+          entity_type: string
+          entity_id: string
+          field: string
+          locale: string
+          text: string
+        }
+        Update: {
+          id?: string
+          restaurant_slug?: string
+          entity_type?: string
+          entity_id?: string
+          field?: string
+          locale?: string
+          text?: string
+        }
+        Relationships: []
+      }
+      campaign_visits: {
+        Row: {
+          id: string
+          campaign: string
+          user_id: string | null
+          event_name: string
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          campaign: string
+          user_id?: string | null
+          event_name: string
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          campaign?: string
+          user_id?: string | null
+          event_name?: string
+          created_at?: string
         }
         Relationships: []
       }

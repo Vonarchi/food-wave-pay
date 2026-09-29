@@ -5,6 +5,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { CreditCard, ArrowLeft, Loader2, CheckCircle } from 'lucide-react';
 import { toast } from 'sonner';
+import { track } from '@/lib/analytics';
 
 const BillingPage = () => {
   const navigate = useNavigate();
@@ -53,6 +54,7 @@ const BillingPage = () => {
   }, [user]);
 
   const handleSubscribe = async () => {
+    track('upgrade_clicked');
     setCheckoutLoading(true);
     try {
       const { data: { session } } = await supabase.auth.getSession();
@@ -107,20 +109,20 @@ const BillingPage = () => {
               <Loader2 className="w-5 h-5 animate-spin" />
               Loading...
             </div>
-          ) : subscriptionStatus === 'active' ? (
+          ) : subscriptionStatus === 'active' || subscriptionStatus === 'trialing' ? (
             <div className="space-y-4">
               <div className="flex items-center gap-2 text-success">
                 <CheckCircle className="w-5 h-5" />
-                <span className="font-medium">Active</span>
+                <span className="font-medium">{subscriptionStatus === 'trialing' ? 'Trialing' : 'Active'}</span>
               </div>
               <p className="text-sm text-muted-foreground">
-                Your subscription is active. Manage billing in Stripe Customer Portal (coming soon).
+                Your ordering plan is {subscriptionStatus}. Digital menus stay published even if this plan ends. Card updates come from the Stripe receipt email.
               </p>
             </div>
           ) : (
             <div className="space-y-4">
               <p className="text-muted-foreground text-sm">
-                Subscribe to unlock full access and support development.
+                Your digital menu and QR code stay free. Subscribe when you want the paid ordering plan. Status: {subscriptionStatus || 'inactive'}.
               </p>
               <Button
                 variant="cart"

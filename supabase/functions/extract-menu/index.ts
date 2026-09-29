@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -32,6 +33,8 @@ type ApiItem = {
   item?: string;
   description?: string;
   price?: number | string;
+  confidence?: number;
+  modifier_groups?: unknown;
 };
 
 function jsonResponse(data: object, status = 200) {
@@ -167,11 +170,17 @@ function normalizeMenuItems(parsed: unknown): { items: object[] } {
       const description = typeof row.description === "string" ? row.description.trim() : "";
       const price = coercePrice(row.price);
 
+      const confidence = typeof row.confidence === "number" && row.confidence >= 0 && row.confidence <= 1
+        ? row.confidence
+        : undefined;
+
       return {
         name,
         description,
         price,
         category,
+        confidence,
+        modifier_groups: Array.isArray(row.modifier_groups) ? row.modifier_groups : undefined,
       };
     })
     .filter(Boolean);
@@ -201,7 +210,9 @@ Rules:
 - Every item MUST include string "name" and numeric "price" (use 0 if unreadable).
 - description should be an empty string if not clearly shown.
 - price must be a JSON number when possible; strings like "12.99" are acceptable.
-- Do not invent items or extra fields.
+- Do not invent items.
+- Add "confidence" as a number from 0 to 1 for how clearly the name and price were readable.
+- If the menu shows add-ons, include "modifier_groups": [{ "name": "Size", "required": true, "max_select": 1, "options": [{ "name": "Large", "price_delta": 2 }] }].
 - Put all dishes inside the "menu_items" array only.`;
 
 serve(async (req) => {
@@ -223,6 +234,25 @@ serve(async (req) => {
 
     if (!imageUrl || typeof imageUrl !== "string" || !imageUrl.startsWith("http")) {
       return jsonResponse({ error: "Image URL is required and must be a valid HTTP(S) URL" }, 400);
+    }
+
+    const authHeader = req.headers.get("Authorization");
+    if (!authHeader?.startsWith("Bearer ")) {
+      return jsonResponse({ error: "Sign in before scanning a menu." }, 401);
+    }
+    const supabase = createClient(
+      Deno.env.get("SUPABASE_URL") ?? "",
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
+    );
+    const { data: userData, error: userError } = await supabase.auth.getUser(
+      authHeader.replace("Bearer ", ""),
+    );
+    if (userError || !userData.user) {
+      return jsonResponse({ error: "Sign in before scanning a menu." }, 401);
+    }
+    const storagePrefix = `${Deno.env.get("SUPABASE_URL")}/storage/v1/object/public/menu-images/${userData.user.id}/`;
+    if (!imageUrl.startsWith(storagePrefix)) {
+      return jsonResponse({ error: "Menu file must be uploaded to your account first." }, 400);
     }
 
     const rawKey =
@@ -261,8 +291,11 @@ serve(async (req) => {
     }
 
     const imageBytes = new Uint8Array(await imageResponse.arrayBuffer());
-    if (imageBytes.length > 4 * 1024 * 1024) {
-      return jsonResponse({ error: "Image too large (max 4MB)" }, 400);
+    const mimeType = imageResponse.headers.get("content-type") || "image/jpeg";
+    const isPdf = mimeType.includes("pdf");
+    const maxBytes = isPdf ? 8 * 1024 * 1024 : 4 * 1024 * 1024;
+    if (imageBytes.length > maxBytes) {
+      return jsonResponse({ error: isPdf ? "PDF too large (max 8MB)" : "Image too large (max 4MB)" }, 400);
     }
 
     let binary = "";
@@ -273,7 +306,6 @@ serve(async (req) => {
     }
 
     const base64Image = btoa(binary);
-    const mimeType = imageResponse.headers.get("content-type") || "image/jpeg";
 
     const requestBody = {
       systemInstruction: {
@@ -371,9 +403,7 @@ serve(async (req) => {
 
       return jsonResponse(
         {
-          error:
-            `Gemini API error (${model}): ${geminiResponse.status} ${lastErrorText.slice(0, 600)}` ||
-            `Gemini API error (${model}): ${geminiResponse.status}`,
+          error: `Gemini API error (${model}): ${geminiResponse.status} ${lastErrorText.slice(0, 600)}`,
         },
         502,
       );

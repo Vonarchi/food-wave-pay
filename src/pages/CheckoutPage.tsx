@@ -1,10 +1,14 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useCartStore, useOrderStore } from '@/store/useStore';
 import { Button } from '@/components/ui/button';
 import { motion } from 'framer-motion';
-import { ArrowLeft, CreditCard, Smartphone, Lock } from 'lucide-react';
+import { ArrowLeft } from 'lucide-react';
 import { toast } from 'sonner';
+import { track } from '@/lib/analytics';
+import { placeOrderPlan } from '@/lib/commerce';
+import { friendlySupabaseError } from '@/lib/restaurant';
+import { supabase } from '@/integrations/supabase/client';
 
 const CheckoutPage = () => {
   const { truckId = 'demo' } = useParams<{ truckId: string }>();
@@ -13,18 +17,37 @@ const CheckoutPage = () => {
   const { addOrder } = useOrderStore();
   const [isProcessing, setIsProcessing] = useState(false);
   const [customerName, setCustomerName] = useState('');
+  const submitted = useRef(false);
 
-  if (items.length === 0) {
-    navigate(`/menu/${truckId}`);
-    return null;
-  }
+  useEffect(() => {
+    if (submitted.current) return;
+    if (items.length === 0) {
+      navigate(`/menu/${truckId}`, { replace: true });
+      return;
+    }
+    track('checkout_started', { restaurant_slug: truckId });
+  }, [items.length, navigate, truckId]);
 
-  const handlePayment = async () => {
+  const handlePlaceOrder = async () => {
     setIsProcessing(true);
 
     try {
-      await new Promise((resolve) => setTimeout(resolve, 2000));
-
+      const settings = await supabase
+        .from('food_trucks')
+        .select('require_payment_before_kitchen, pay_at_pickup_enabled, card_payments_enabled, stripe_account_id, test_mode')
+        .eq('slug', truckId)
+        .maybeSingle();
+      const row = settings.error ? null : settings.data;
+      const plan = placeOrderPlan({
+        requirePaymentBeforeKitchen: row?.require_payment_before_kitchen === true,
+        payAtPickupAllowed: row?.pay_at_pickup_enabled !== false,
+        cardPaymentsReady: Boolean(row?.card_payments_enabled && row?.stripe_account_id),
+        testMode: row?.test_mode === true,
+      });
+      if (plan.action === 'blocked') {
+        toast.error(plan.message);
+        return;
+      }
       const order = await Promise.race([
         addOrder({
           truckId,
@@ -32,7 +55,10 @@ const CheckoutPage = () => {
           subtotal: getSubtotal(),
           tax: getTax(),
           total: getTotal(),
-          status: 'received',
+          status: plan.status,
+          paymentStatus: plan.paymentStatus,
+          source: 'qr',
+          isTest: plan.action === 'send_to_kitchen' ? plan.test : false,
           customerName: customerName || undefined,
         }),
         new Promise<never>((_, reject) =>
@@ -40,20 +66,34 @@ const CheckoutPage = () => {
         ),
       ]);
 
+      if (plan.action === 'await_card') {
+        const payment = await supabase.functions.invoke('commerce', {
+          body: { op: 'food_checkout', slug: truckId, orderId: order.id, token: order.guestAccessToken, origin: window.location.origin },
+        });
+        const url = (payment.data as { url?: string; error?: string } | null)?.url;
+        if (!url) {
+          toast.error((payment.data as { error?: string } | null)?.error || 'Card payment could not start. The order is held.');
+          return;
+        }
+        submitted.current = true;
+        clearCart();
+        window.location.assign(url);
+        return;
+      }
+      submitted.current = true;
       clearCart();
-      toast.success('Order placed successfully!');
-      navigate(`/confirmation/${order.id}`);
+      track('order_completed', { restaurant_slug: truckId });
+      toast.success(plan.action === 'send_to_kitchen' && plan.test ? 'Test order sent to the kitchen' : 'Order sent to the kitchen');
+      navigate(`/confirmation/${order.id}?t=${order.guestAccessToken}`);
     } catch (error) {
       console.error('Error placing order:', error);
-      toast.error(
-        error instanceof Error && error.message.includes('timed out')
-          ? 'Network timed out. Check your connection and try again.'
-          : 'Failed to place order. Please try again.'
-      );
+      toast.error(friendlySupabaseError(error, 'Could not send the order. Please try again.'));
     } finally {
       setIsProcessing(false);
     }
   };
+
+  if (items.length === 0) return null;
 
   return (
     <div className="min-h-screen bg-background">
@@ -143,41 +183,17 @@ const CheckoutPage = () => {
           />
         </motion.section>
 
-        {/* Payment Methods */}
         <motion.section
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.2 }}
-          className="space-y-3"
+          className="bg-card rounded-2xl border border-border p-4"
         >
-          <h2 className="font-semibold text-foreground">Payment Method</h2>
-          
-          <button className="w-full bg-foreground text-background rounded-xl p-4 flex items-center gap-3 hover:opacity-90 transition-opacity">
-            <Smartphone className="w-6 h-6" />
-            <span className="font-semibold">Apple Pay</span>
-          </button>
-
-          <button className="w-full bg-card border border-border rounded-xl p-4 flex items-center gap-3 hover:border-primary/30 transition-colors">
-            <div className="w-6 h-6 bg-gradient-to-br from-blue-500 to-green-500 rounded" />
-            <span className="font-semibold text-foreground">Google Pay</span>
-          </button>
-
-          <button className="w-full bg-card border border-border rounded-xl p-4 flex items-center gap-3 hover:border-primary/30 transition-colors">
-            <CreditCard className="w-6 h-6 text-muted-foreground" />
-            <span className="font-semibold text-foreground">Credit / Debit Card</span>
-          </button>
+          <h2 className="font-semibold text-foreground mb-2">Pickup</h2>
+          <p className="text-sm text-muted-foreground">
+            This sends your order to the kitchen. Card payment is not charged in the app yet — pay when you pick up unless the restaurant tells you otherwise.
+          </p>
         </motion.section>
-
-        {/* Security Note */}
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 0.3 }}
-          className="flex items-center justify-center gap-2 text-xs text-muted-foreground"
-        >
-          <Lock className="w-3 h-3" />
-          <span>Payments secured by PCI-compliant processing</span>
-        </motion.div>
       </div>
 
       {/* Pay Button */}
@@ -186,16 +202,16 @@ const CheckoutPage = () => {
           variant="cart"
           size="xl"
           className="w-full"
-          onClick={handlePayment}
+          onClick={handlePlaceOrder}
           disabled={isProcessing}
         >
           {isProcessing ? (
             <div className="flex items-center gap-2">
               <div className="w-5 h-5 border-2 border-primary-foreground/30 border-t-primary-foreground rounded-full animate-spin" />
-              Processing...
+              Sending order...
             </div>
           ) : (
-            `Pay ${getTotal().toFixed(2)}`
+            `Place order · $${getTotal().toFixed(2)}`
           )}
         </Button>
       </div>

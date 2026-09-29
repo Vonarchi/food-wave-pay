@@ -39,6 +39,37 @@ Deno.serve(async (req) => {
     switch (event.type) {
       case "checkout.session.completed": {
         const session = event.data.object as Stripe.Checkout.Session;
+        if (session.metadata?.kind === "food_order") {
+          const orderId = session.metadata.order_id;
+          const restaurantSlug = session.metadata.restaurant_slug;
+          if (!orderId || !restaurantSlug) break;
+          const { data: existing } = await supabase
+            .from("orders")
+            .select("payment_status")
+            .eq("id", orderId)
+            .eq("truck_id", restaurantSlug)
+            .maybeSingle();
+          if (!existing || existing.payment_status === "paid") break;
+          const { data: truck } = await supabase.from("food_trucks").select("order_route").eq("slug", restaurantSlug).maybeSingle();
+          const route = truck?.order_route;
+          const routingStatus = route === "pos" || route === "both" ? "pending_submission" : "not_required";
+          await supabase
+            .from("orders")
+            .update({
+              payment_status: "paid",
+              payment_provider: "stripe",
+              payment_intent_id: typeof session.payment_intent === "string" ? session.payment_intent : null,
+              payment_amount: session.amount_total != null ? session.amount_total / 100 : null,
+              payment_method_type: "card",
+              status: "received",
+              routing_status: routingStatus,
+            })
+            .eq("id", orderId)
+            .eq("truck_id", restaurantSlug)
+            .neq("payment_status", "paid");
+          console.log(`Food order ${orderId} marked paid`);
+          break;
+        }
         const customerId = session.customer as string;
         const subscriptionId = session.subscription as string;
         const metaUserId = session.metadata?.supabase_user_id;
@@ -77,36 +108,44 @@ Deno.serve(async (req) => {
         const status =
           subscription.status === "active"
             ? "active"
-            : subscription.status === "canceled"
-              ? "canceled"
-              : subscription.status === "past_due"
-                ? "past_due"
-                : "inactive";
+            : subscription.status === "trialing"
+              ? "trialing"
+              : subscription.status === "canceled"
+                ? "canceled"
+                : subscription.status === "past_due"
+                  ? "past_due"
+                  : "inactive";
 
-        await supabase
+        const profileUpdate = {
+          subscription_status: status,
+          stripe_subscription_id: subscription.id,
+        };
+        const { data: updatedRows } = await supabase
           .from("profiles")
-          .update({ subscription_status: status })
-          .eq("stripe_subscription_id", subscription.id);
-        console.log(`Updated subscription ${subscription.id} status: ${status}`);
-
-        if (status !== "active") {
-          let ownerId = subscription.metadata?.supabase_user_id ?? null;
-          if (!ownerId) {
-            const { data: prof } = await supabase
-              .from("profiles")
-              .select("id")
-              .eq("stripe_subscription_id", subscription.id)
-              .maybeSingle();
-            ownerId = prof?.id ?? null;
-          }
-          if (ownerId) {
-            await supabase
-              .from("food_trucks")
-              .update({ is_published: false })
-              .eq("owner_id", ownerId);
-            console.log(`Unpublished trucks for owner ${ownerId}`);
-          }
+          .update(profileUpdate)
+          .eq("stripe_subscription_id", subscription.id)
+          .select("id");
+        if (!updatedRows?.length && subscription.metadata?.supabase_user_id) {
+          await supabase
+            .from("profiles")
+            .update(profileUpdate)
+            .eq("id", subscription.metadata.supabase_user_id);
         }
+        console.log(`Updated subscription ${subscription.id} status: ${status}`);
+        // Digital menus stay published when a subscription lapses.
+        // Ordering upgrades are recorded on the profile only.
+        break;
+      }
+
+      case "account.updated": {
+        const account = event.data.object as Stripe.Account;
+        const restaurantSlug = account.metadata?.restaurant_slug;
+        if (!restaurantSlug || !account.id) break;
+        await supabase
+          .from("food_trucks")
+          .update({ card_payments_enabled: account.charges_enabled === true })
+          .eq("slug", restaurantSlug)
+          .eq("stripe_account_id", account.id);
         break;
       }
 

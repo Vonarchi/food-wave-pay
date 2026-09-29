@@ -6,7 +6,7 @@ import { sampleFoodTruck } from '@/data/sampleData';
 /** Hard cap so a stalled PostgREST fetch cannot leave the menu in an infinite loading state (seen in prod). */
 const MENU_FETCH_TIMEOUT_MS = 15000;
 
-function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+function withTimeout<T>(promise: PromiseLike<T>, ms: number, label: string): Promise<T> {
   return new Promise((resolve, reject) => {
     const t = setTimeout(() => reject(new Error(`${label}_timeout`)), ms);
     promise.then(
@@ -36,9 +36,14 @@ interface UseMenuItemsResult {
   error: string | null;
   /** True when showing sample data (empty DB, error, or timeout). */
   usingFallback: boolean;
-  /** True when the truck exists but is not published (paywall — not public yet). */
+  /** True when guests cannot see this menu (draft, paused, or missing). */
   menuNotLive: boolean;
+  /** False for draft and paused menus. Demo is treated as published. */
+  isPublished: boolean;
 }
+
+const PUBLIC_RESTAURANT_COLUMNS =
+  'slug, name, description, logo_url, cover_image_url, accent_color, location, hours, is_published';
 
 const mapDbItemToMenuItem = (row: {
   id: string;
@@ -75,6 +80,7 @@ export const useMenuItems = (truckId: string): UseMenuItemsResult => {
   const [error, setError] = useState<string | null>(null);
   const [usingFallback, setUsingFallback] = useState(false);
   const [menuNotLive, setMenuNotLive] = useState(false);
+  const [isPublished, setIsPublished] = useState(false);
   const [truckInfo, setTruckInfo] = useState<{
     name: string;
     description: string;
@@ -99,8 +105,8 @@ export const useMenuItems = (truckId: string): UseMenuItemsResult => {
         if (truckId === 'demo') {
           const truckResult = await withTimeout(
             supabase
-              .from('food_trucks' as any)
-              .select('*')
+              .from('food_trucks')
+              .select(PUBLIC_RESTAURANT_COLUMNS)
               .eq('slug', 'demo')
               .maybeSingle(),
             MENU_FETCH_TIMEOUT_MS,
@@ -111,7 +117,7 @@ export const useMenuItems = (truckId: string): UseMenuItemsResult => {
             setTruckInfo({
               name: t.name as string,
               description: (t.description as string) || '',
-              location: (t.location as string) || 'Food Truck Row',
+              location: (t.location as string) || '',
               hours: (t.hours as string) || '11am - 8pm',
               logo_url: (t.logo_url as string) || undefined,
               cover_image_url: (t.cover_image_url as string) || undefined,
@@ -123,6 +129,7 @@ export const useMenuItems = (truckId: string): UseMenuItemsResult => {
           setItems(sampleFoodTruck.menu);
           setUsingFallback(false);
           setMenuNotLive(false);
+          setIsPublished(true);
           return;
         }
 
@@ -130,8 +137,8 @@ export const useMenuItems = (truckId: string): UseMenuItemsResult => {
         const [truckResult, menuResult] = await withTimeout(
           Promise.all([
             supabase
-              .from('food_trucks' as any)
-              .select('*')
+              .from('food_trucks')
+              .select(PUBLIC_RESTAURANT_COLUMNS)
               .eq('slug', truckId)
               .maybeSingle(),
             supabase
@@ -147,16 +154,16 @@ export const useMenuItems = (truckId: string): UseMenuItemsResult => {
 
         console.info("[useMenuItems] fetch ok", { truckId });
 
-        const t = truckResult.data as Record<string, unknown> | null;
-        const slug = (t?.slug as string) || truckId;
-        const isPublished = Boolean(t?.is_published);
+        const t = truckResult.data;
+        const published = Boolean(t?.is_published);
+        setIsPublished(published);
 
         // Set truck info
         if (t) {
           setTruckInfo({
             name: t.name as string,
             description: (t.description as string) || '',
-            location: (t.location as string) || 'Food Truck Row',
+            location: (t.location as string) || '',
             hours: (t.hours as string) || '11am - 8pm',
             logo_url: (t.logo_url as string) || undefined,
             cover_image_url: (t.cover_image_url as string) || undefined,
@@ -173,7 +180,7 @@ export const useMenuItems = (truckId: string): UseMenuItemsResult => {
           setItems(menuResult.data.map(mapDbItemToMenuItem));
           setUsingFallback(false);
           setMenuNotLive(false);
-        } else if (!isPublished) {
+        } else if (!published) {
           setItems([]);
           setUsingFallback(false);
           setMenuNotLive(true);
@@ -187,12 +194,13 @@ export const useMenuItems = (truckId: string): UseMenuItemsResult => {
         console.warn("[useMenuItems] fetch failed", { truckId, msg });
         setError(
           msg.endsWith("_timeout")
-            ? "Menu load timed out. Showing sample menu — check network or Supabase."
-            : "Failed to load menu. Showing sample menu."
+            ? "The menu took too long to load. Check your connection and try again."
+            : "We couldn’t load this menu. Check your connection and try again."
         );
-        setItems(sampleFoodTruck.menu);
-        setUsingFallback(true);
+        setItems([]);
+        setUsingFallback(false);
         setMenuNotLive(false);
+        setIsPublished(false);
       } finally {
         setIsLoading(false);
       }
@@ -212,7 +220,7 @@ export const useMenuItems = (truckId: string): UseMenuItemsResult => {
     truckInfo?.name ||
     (usingFallback ? sampleFoodTruck.name : menuNotLive ? truckId : 'Smackin Jacks');
   const truckDescription = truckInfo?.description || (usingFallback ? sampleFoodTruck.description : 'Order fresh food, made to order');
-  const truckLocation = truckInfo?.location || 'Food Truck Row';
+  const truckLocation = truckInfo?.location || '';
   const truckHours = truckInfo?.hours || '11am - 8pm';
 
   return {
@@ -229,5 +237,6 @@ export const useMenuItems = (truckId: string): UseMenuItemsResult => {
     error,
     usingFallback,
     menuNotLive,
+    isPublished,
   };
 };

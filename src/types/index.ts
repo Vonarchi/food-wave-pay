@@ -60,6 +60,7 @@ export interface Order {
   status: OrderStatus;
   createdAt: Date;
   customerName?: string;
+  isTest?: boolean;
 }
 
 export type OrderStatus = 'pending' | 'received' | 'in_progress' | 'ready' | 'completed';

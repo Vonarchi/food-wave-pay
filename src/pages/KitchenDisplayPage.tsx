@@ -11,11 +11,12 @@ import { supabase } from '@/integrations/supabase/client';
 const KitchenDisplayPage = () => {
   const navigate = useNavigate();
   const { updateOrderStatus, getActiveOrders, fetchOrders, setOrders } = useOrderStore();
-  const activeOrders = getActiveOrders();
+  const activeOrders = getActiveOrders().filter((order) => order.status === 'received' || order.status === 'in_progress' || order.status === 'ready');
   const prevOrderCountRef = useRef(activeOrders.length);
 
   // Fetch orders on mount and subscribe to real-time updates
   useEffect(() => {
+    try { window.localStorage.setItem('kk-kitchen-seen', '1'); } catch { /* private mode */ }
     fetchOrders();
 
     const channel = supabase
@@ -40,6 +41,7 @@ const KitchenDisplayPage = () => {
               total: parseFloat(payload.new.total),
               status: payload.new.status as OrderStatus,
               createdAt: new Date(payload.new.created_at),
+              isTest: payload.new.is_test === true,
             };
             setOrders((prev) => [newOrder, ...prev]);
           } else if (payload.eventType === 'UPDATE') {
@@ -267,6 +269,7 @@ const OrderCard = ({
       <div className="bg-secondary/50 p-3 flex items-center justify-between">
         <div>
           <p className="text-2xl font-bold text-foreground">#{order.orderNumber}</p>
+          {order.isTest && <p className="text-xs font-semibold uppercase tracking-wide text-warning">Test order</p>}
           {order.customerName && (
             <p className="text-sm text-muted-foreground">{order.customerName}</p>
           )}

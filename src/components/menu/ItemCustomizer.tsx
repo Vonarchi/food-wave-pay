@@ -9,9 +9,12 @@ import { toast } from 'sonner';
 interface ItemCustomizerProps {
   item: MenuItem;
   onClose: () => void;
+  displayName?: string;
+  displayDescription?: string;
+  labels?: Record<string, string>;
 }
 
-export const ItemCustomizer = ({ item, onClose }: ItemCustomizerProps) => {
+export const ItemCustomizer = ({ item, onClose, displayName, displayDescription, labels }: ItemCustomizerProps) => {
   const [quantity, setQuantity] = useState(1);
   const [selectedModifiers, setSelectedModifiers] = useState<Record<string, ModifierOption[]>>({});
   const [instructions, setInstructions] = useState('');
@@ -86,7 +89,7 @@ export const ItemCustomizer = ({ item, onClose }: ItemCustomizerProps) => {
       });
 
     addItem(item, quantity, modifiers, instructions || undefined);
-    toast.success(`${item.name} added to cart`);
+    toast.success(`${displayName || item.name} added to cart`);
     onClose();
   };
 
@@ -108,7 +111,7 @@ export const ItemCustomizer = ({ item, onClose }: ItemCustomizerProps) => {
       >
         {/* Header */}
         <div className="flex items-center justify-between p-4 border-b border-border">
-          <h2 className="text-xl font-bold text-foreground">{item.name}</h2>
+          <h2 className="text-xl font-bold text-foreground">{displayName || item.name}</h2>
           <Button variant="ghost" size="icon-sm" onClick={onClose}>
             <X className="w-5 h-5" />
           </Button>
@@ -118,7 +121,7 @@ export const ItemCustomizer = ({ item, onClose }: ItemCustomizerProps) => {
         <div className="flex-1 overflow-y-auto p-4 space-y-6">
           {/* Description & Base Price */}
           <div>
-            <p className="text-muted-foreground">{item.description}</p>
+            <p className="text-muted-foreground">{displayDescription || item.description}</p>
             <p className="text-lg font-bold text-primary mt-2">${item.price.toFixed(2)}</p>
           </div>
 
@@ -126,7 +129,7 @@ export const ItemCustomizer = ({ item, onClose }: ItemCustomizerProps) => {
           {item.modifiers?.map((group) => (
             <div key={group.id} className="space-y-3">
               <div className="flex items-center justify-between">
-                <h3 className="font-semibold text-foreground">{group.name}</h3>
+                <h3 className="font-semibold text-foreground">{labels?.[group.id] || group.name}</h3>
                 <span className="text-xs text-muted-foreground">
                   {group.required ? 'Required' : 'Optional'}
                   {group.maxSelections > 1 && ` • Select up to ${group.maxSelections}`}
@@ -145,7 +148,7 @@ export const ItemCustomizer = ({ item, onClose }: ItemCustomizerProps) => {
                           : 'border-border hover:border-primary/30'
                       }`}
                     >
-                      <span className="font-medium text-foreground">{option.name}</span>
+                      <span className="font-medium text-foreground">{labels?.[option.id] || option.name}</span>
                       <div className="flex items-center gap-2">
                         {option.price > 0 && (
                           <span className="text-sm text-muted-foreground">

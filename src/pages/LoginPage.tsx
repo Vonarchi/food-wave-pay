@@ -22,7 +22,7 @@ const LoginPage = () => {
     try {
       const { error } = await signIn(email, password);
       console.info("[sign-in] submit finished", { hasError: Boolean(error) });
-      if (!error) navigate('/admin', { replace: true });
+      if (!error) navigate('/admin/dashboard', { replace: true });
     } finally {
       setIsSubmitting(false);
     }
@@ -39,11 +39,11 @@ const LoginPage = () => {
           <SupabaseEnvBanner />
           <div className="text-center mb-8">
             <img
-              src="/logo.png"
+              src="/logo.png?v=3"
               alt="KioKitchen"
-              className="h-14 w-auto mx-auto mb-4 object-contain"
-              width={56}
-              height={56}
+              className="h-32 w-auto mx-auto mb-4 object-contain"
+              width={640}
+              height={320}
             />
             <h1 className="text-2xl font-bold text-foreground">Restaurant Login</h1>
             <p className="text-muted-foreground mt-1">Sign in to manage your menu and orders</p>

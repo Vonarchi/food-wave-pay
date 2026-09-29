@@ -94,9 +94,15 @@ Deno.serve(async (req) => {
       line_items: [{ price: priceId, quantity: 1 }],
       success_url: successUrl,
       cancel_url: cancelUrl,
-      metadata: { supabase_user_id: user.id },
+      metadata: {
+        supabase_user_id: user.id,
+        plan_code: Deno.env.get("STRIPE_PLAN_CODE") ?? "ordering",
+      },
       subscription_data: {
-        metadata: { supabase_user_id: user.id },
+        metadata: {
+          supabase_user_id: user.id,
+          plan_code: Deno.env.get("STRIPE_PLAN_CODE") ?? "ordering",
+        },
       },
     });
 

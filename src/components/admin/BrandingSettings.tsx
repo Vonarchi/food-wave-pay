@@ -41,7 +41,9 @@ export const BrandingSettings = ({ truckId, currentLogoUrl, currentAccentColor, 
 
     setUploading(true);
     try {
-      const fileName = `logo-${truckId}-${Date.now()}.${file.name.split('.').pop()}`;
+      const { data: sessionData } = await supabase.auth.getUser();
+      if (!sessionData.user) throw new Error('Sign in again to upload a logo.');
+      const fileName = `${sessionData.user.id}/logo-${truckId}-${Date.now()}.${file.name.split('.').pop()}`;
       const { error: uploadError } = await supabase.storage
         .from('menu-images')
         .upload(fileName, file);
@@ -67,31 +69,23 @@ export const BrandingSettings = ({ truckId, currentLogoUrl, currentAccentColor, 
     try {
       // Upsert the food truck record
       const { data: existing } = await supabase
-        .from('food_trucks' as any)
+        .from('food_trucks')
         .select('id')
         .eq('slug', truckId)
         .maybeSingle();
 
-      if (existing) {
-        const { error } = await supabase
-          .from('food_trucks' as any)
-          .update({
-            logo_url: logoUrl || null,
-            accent_color: accentColor,
-          } as any)
-          .eq('slug', truckId);
-        if (error) throw error;
-      } else {
-        const { error } = await supabase
-          .from('food_trucks' as any)
-          .insert({
-            slug: truckId,
-            name: truckId,
-            logo_url: logoUrl || null,
-            accent_color: accentColor,
-          } as any);
-        if (error) throw error;
+      if (!existing) {
+        toast.error('Create your restaurant before saving branding.');
+        return;
       }
+      const { error } = await supabase
+        .from('food_trucks')
+        .update({
+          logo_url: logoUrl || null,
+          accent_color: accentColor,
+        })
+        .eq('slug', truckId);
+      if (error) throw error;
 
       onUpdate({ logo_url: logoUrl || undefined, accent_color: accentColor });
       toast.success('Branding saved!');

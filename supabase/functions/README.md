@@ -12,6 +12,8 @@ supabase secrets set GOOGLE_GEMINI_API_KEY=your_key
 supabase functions deploy extract-menu
 ```
 
+The function requires a signed-in user (`verify_jwt = true`) and only accepts a file URL under `menu-images/{that user's id}/`. Redeploy after pulling Phase 1 or menu scan returns 401.
+
 Create the key in [Google AI Studio](https://aistudio.google.com/apikey) (not a random Google Cloud key unless it has Generative Language API enabled). If Gemini returns **API_KEY_INVALID**, replace the secret with a new AI Studio key and redeploy.
 
 If the app shows **no dishes parsed** but no API error: redeploy this function so normalization + Gemini response handling match the repo, then check **Logs** for lines `zero items after normalize` or `Raw Gemini content`.
@@ -54,5 +56,35 @@ supabase functions deploy create-checkout-session
 
 **Request:** `POST` with `Authorization: Bearer <supabase_access_token>`  
 Optional body: `{ "returnUrl": "https://your-app.com" }`
+
+---
+
+## voice-order
+
+Interprets a spoken or typed order for one published restaurant. The model only proposes menu ids. Prices and modifiers are checked against `menu_items` (the demo slug uses the built-in sample menu).
+
+**Env:** `GOOGLE_GEMINI_API_KEY` or `GEMINI_API_KEY`, plus the usual `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY`. No new browser variable.
+
+**Deploy:**
+```bash
+supabase functions deploy voice-order --no-verify-jwt
+```
+
+Apply migration `20260928181003_phase2_voice_ordering` first. Guests call it with the anon key. `verify_jwt` stays off because customers are not signed in; the function rate-limits by IP and session.
+
+---
+
+## channel-order
+
+Phone and drive-thru adapter around the same ordering engine. It does not price items itself.
+
+**Env:** `PHONE_WEBHOOK_SECRET` (required before the carrier webhook accepts calls), `DRIVE_THRU_DEVICE_SECRET` (optional device header), `PUBLIC_APP_URL` (optional absolute payment link). Gemini uses the same key as voice-order. No card data is collected.
+
+**Deploy:**
+```bash
+supabase functions deploy channel-order --project-ref awryxczjacqrgjlctrjc --no-verify-jwt
+```
+
+Apply migration `20260928194500_phase3_channels` first. Drive-thru starts only for the restaurant owner or a device that presents the secret. The phone webhook returns 503 until `PHONE_WEBHOOK_SECRET` is set.
 
 **Response:** `{ "url": "https://checkout.stripe.com/..." }`

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { useOrderStore } from '@/store/useStore';
-import { supabase } from '@/integrations/supabase/client';
+import { createGuestOrderClient } from '@/lib/guestOrders';
 import { Button } from '@/components/ui/button';
 import { motion } from 'framer-motion';
 import { CheckCircle, Clock, ChefHat, ArrowLeft, Loader2 } from 'lucide-react';
@@ -34,6 +34,8 @@ const mapDbRowToOrder = (row: {
 
 const ConfirmationPage = () => {
   const { orderId } = useParams<{ orderId: string }>();
+  const [searchParams] = useSearchParams();
+  const token = searchParams.get('t');
   const navigate = useNavigate();
   const orderFromStore = useOrderStore((state) =>
     state.orders.find((o) => o.id === orderId)
@@ -51,19 +53,20 @@ const ConfirmationPage = () => {
       setLoading(false);
       return;
     }
-    if (!orderId) {
+    if (!orderId || !token) {
       setLoading(false);
       setNotFound(true);
       return;
     }
     const fetchOrder = async () => {
       try {
+        const guest = createGuestOrderClient(token);
         const result = await Promise.race([
-          supabase
+          guest
             .from('orders')
             .select('*')
             .eq('id', orderId)
-            .single(),
+            .maybeSingle(),
           new Promise<never>((_, reject) =>
             setTimeout(() => reject(new Error('Order lookup timed out')), 8000)
           ),
@@ -89,7 +92,7 @@ const ConfirmationPage = () => {
     return () => {
       active = false;
     };
-  }, [orderId, orderFromStore]);
+  }, [orderId, orderFromStore, token]);
 
   const order = orderFromStore ?? fetchedOrder;
 
@@ -248,7 +251,7 @@ const ConfirmationPage = () => {
 
           <div className="border-t border-border mt-4 pt-4">
             <div className="flex justify-between text-lg font-bold text-foreground">
-              <span>Total Paid</span>
+              <span>Order total</span>
               <span>${order.total.toFixed(2)}</span>
             </div>
           </div>

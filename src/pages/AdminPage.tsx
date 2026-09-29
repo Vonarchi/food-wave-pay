@@ -2,18 +2,19 @@ import { useState, useRef, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
-import { formatEdgeFunctionFailure } from '@/lib/edgeFunctionErrors';
-import { isPaidSubscriptionActive } from '@/lib/subscription';
-import { mapApiModifiersToApp, normalizeExtractionPayload } from '@/lib/menuExtraction';
+import { importMenuFromFile } from '@/lib/menuImport';
+import { friendlySupabaseError, isLowConfidenceItem, menuStatusLabel, menuStatusPatch, readMenuStatus, type MenuStatus } from '@/lib/restaurant';
+import { track } from '@/lib/analytics';
+import { RestaurantQrCard } from '@/components/restaurant/RestaurantQrCard';
 import { Button } from '@/components/ui/button';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Camera, Upload, ArrowLeft, Trash2, Check, Loader2, ImageIcon, Plus, Edit2, Image as ImageIconLucide, QrCode, Download, Settings2, LogOut, CreditCard, Globe } from 'lucide-react';
+import { Camera, Upload, ArrowLeft, Trash2, Check, Loader2, ImageIcon, Plus, Edit2, Image as ImageIconLucide, QrCode, Settings2, LogOut, CreditCard, Globe } from 'lucide-react';
 import { toast } from 'sonner';
-import { QRCodeSVG } from 'qrcode.react';
 import { ModifierEditor } from '@/components/admin/ModifierEditor';
 import { BrandingSettings } from '@/components/admin/BrandingSettings';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import type { ModifierGroup } from '@/types';
+import type { Json } from '@/integrations/supabase/types';
 
 const CATEGORY_OPTIONS = ['Appetizers', 'Mains', 'Sides', 'Drinks', 'Desserts', 'Specials', 'Main'];
 
@@ -131,6 +132,8 @@ interface ExtractedItem {
   selected?: boolean;
   /** Draft modifiers mapped for menu_items.modifiers JSONB */
   modifiers?: ModifierGroup[];
+  confidence?: number;
+  available?: boolean;
 }
 
 /** Storage uploads should fail fast; extraction can take longer (Gemini + model fallbacks on the server). */
@@ -143,14 +146,15 @@ const PIPELINE_FAILSAFE_MS = UPLOAD_TIMEOUT_MS + EXTRACTION_INVOKE_TIMEOUT_MS + 
 const AdminPage = () => {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
-  const { user, signOut, profile, refreshProfile } = useAuth();
+  const { user, signOut, refreshProfile } = useAuth();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
 
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [extractedItems, setExtractedItems] = useState<ExtractedItem[]>([]);
-  const [truckId, setTruckId] = useState('demo');
+  const [truckId, setTruckId] = useState('');
+  const [menuStatus, setMenuStatus] = useState<MenuStatus>('draft');
   const [isSaving, setIsSaving] = useState(false);
 
   const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -192,62 +196,18 @@ const AdminPage = () => {
     }
 
     try {
-      console.info('[kiokitchen:extract] Storage upload started → bucket menu-images');
-      const fileName = `menu-${Date.now()}.${file.name.split('.').pop()}`;
-      const { error: uploadError } = await Promise.race([
-        supabase.storage.from('menu-images').upload(fileName, file, {
-          cacheControl: '3600',
-          upsert: false,
-        }),
-        new Promise<never>((_, reject) =>
-          setTimeout(
-            () => reject(new Error(`Upload timed out after ${UPLOAD_TIMEOUT_MS / 1000} seconds`)),
-            UPLOAD_TIMEOUT_MS
-          )
-        ),
-      ]);
-
-      if (uploadError) {
-        console.error('[kiokitchen:extract] Upload failed:', uploadError);
-        throw new Error(`Upload failed: ${uploadError.message}`);
-      }
-      console.info('[kiokitchen:extract] Upload succeeded:', fileName);
-
-      const { data: urlData } = supabase.storage.from('menu-images').getPublicUrl(fileName);
-      const imageUrl = urlData.publicUrl;
-      console.info('[kiokitchen:extract] Public imageUrl:', imageUrl);
-
-      console.info('[kiokitchen:extract] Invoking edge function extract-menu…');
-      const invokeResult = await supabase.functions.invoke('extract-menu', {
-        body: { imageUrl },
-        timeout: EXTRACTION_INVOKE_TIMEOUT_MS,
-      });
-      const { data, error } = invokeResult;
-      console.info(
-        '[kiokitchen:extract] extract-menu response received:',
-        error ? `error: ${error.message}` : `ok, raw items=${Array.isArray(data?.items) ? data.items.length : 0}`
-      );
-
-      if (error) {
-        let detail = await formatEdgeFunctionFailure(error, invokeResult.response);
-        if (/\b404\b/.test(detail) || detail.toLowerCase().includes('not found')) {
-          detail += ' — deploy the function: supabase functions deploy extract-menu (project awryxczjacqrgjlctrjc)';
-        }
-        console.error('[kiokitchen:extract] Extraction failed:', detail);
-        throw new Error(`Extraction failed: ${detail}`);
-      }
-
-      if (data?.error) {
-        throw new Error(typeof data.error === 'string' ? data.error : JSON.stringify(data.error));
-      }
-
-      const drafts = normalizeExtractionPayload(data?.items);
-      const itemsWithSelection: ExtractedItem[] = drafts.map((d) => ({
+      if (!user) throw new Error('Sign in again before uploading a menu.');
+      track('menu_upload_started', { restaurant_slug: truckId || null });
+      const imported = await importMenuFromFile(file, user.id);
+      track('menu_extraction_completed', { restaurant_slug: truckId || null, item_count: imported.length });
+      const itemsWithSelection: ExtractedItem[] = imported.map((d) => ({
         name: d.name,
         description: d.description || '',
         price: d.price,
         category: d.category,
-        modifiers: mapApiModifiersToApp(d.modifier_groups),
+        modifiers: d.modifiers,
+        confidence: d.confidence,
+        available: d.available,
         selected: true,
       }));
 
@@ -304,10 +264,8 @@ const AdminPage = () => {
   ].sort((a, b) => a.localeCompare(b));
 
   const saveSelectedItems = async () => {
-    if (truckId.trim() === 'demo') {
-      toast.error(
-        'The slug "demo" is reserved for the built-in sample menu. Change Food Truck ID to your restaurant slug before saving items.'
-      );
+    if (!truckId || truckId.trim() === 'demo') {
+      toast.error('Create your restaurant before saving menu items. The demo menu is only a sample.');
       return;
     }
 
@@ -327,8 +285,8 @@ const AdminPage = () => {
         description: item.description || null,
         price: item.price,
         category: item.category,
-        is_available: true,
-        modifiers: item.modifiers?.length ? item.modifiers : [],
+        is_available: item.available !== false,
+        modifiers: (item.modifiers?.length ? item.modifiers : []) as unknown as Json,
       }));
 
       const { error } = await supabase.from('menu_items').insert(itemsToInsert);
@@ -338,6 +296,7 @@ const AdminPage = () => {
       }
 
       toast.success(`Saved ${selectedItems.length} menu items!`);
+      track('menu_review_completed', { restaurant_slug: truckId, item_count: selectedItems.length });
       setExtractedItems([]);
       setImagePreview(null);
     } catch (error) {
@@ -382,7 +341,7 @@ const AdminPage = () => {
       if (data?.slug) setTruckId(data.slug);
     };
     loadOwnerTruck();
-  }, [user?.id]);
+  }, [user]);
 
   const [truckBranding, setTruckBranding] = useState<{ logo_url?: string; accent_color?: string }>({});
   const [truckPublished, setTruckPublished] = useState(false);
@@ -401,48 +360,38 @@ const AdminPage = () => {
 
   useEffect(() => {
     const fetchTruck = async () => {
+      if (!truckId) return;
       const { data } = await supabase
         .from('food_trucks')
-        .select('logo_url, accent_color, is_published')
+        .select('logo_url, accent_color, is_published, menu_status')
         .eq('slug', truckId)
         .maybeSingle();
-      const row = data as { logo_url?: string; accent_color?: string; is_published?: boolean } | null;
+      const row = data as { logo_url?: string; accent_color?: string; is_published?: boolean; menu_status?: string | null } | null;
       setTruckBranding({ logo_url: row?.logo_url, accent_color: row?.accent_color });
-      setTruckPublished(Boolean(row?.is_published));
+      const status = readMenuStatus({ menu_status: row?.menu_status, is_published: row?.is_published });
+      setMenuStatus(status);
+      setTruckPublished(status === 'published');
     };
     fetchTruck();
   }, [truckId]);
 
-  const handlePublishMenu = async () => {
-    if (!isPaidSubscriptionActive(profile?.subscription_status)) {
-      toast.error('Subscribe first to publish your menu.');
-      navigate('/admin/billing');
-      return;
-    }
+  const setRestaurantMenuStatus = async (status: MenuStatus) => {
+    if (!truckId || !user) return;
     setPublishBusy(true);
     try {
-      const { error } = await supabase.from('food_trucks').update({ is_published: true }).eq('slug', truckId);
+      const { error } = await supabase
+        .from('food_trucks')
+        .update(menuStatusPatch(status))
+        .eq('slug', truckId)
+        .eq('owner_id', user.id);
       if (error) throw error;
-      setTruckPublished(true);
-      toast.success('Menu is live — customers can order from your links and the home page.');
+      setMenuStatus(status);
+      setTruckPublished(status === 'published');
+      if (status === 'published') track('menu_published', { restaurant_slug: truckId });
+      toast.success(status === 'published' ? 'Menu is live.' : status === 'paused' ? 'Menu paused. Items are still saved.' : 'Menu moved back to draft.');
     } catch (e) {
       console.error(e);
-      toast.error(e instanceof Error ? e.message : 'Could not publish');
-    } finally {
-      setPublishBusy(false);
-    }
-  };
-
-  const handleUnpublishMenu = async () => {
-    setPublishBusy(true);
-    try {
-      const { error } = await supabase.from('food_trucks').update({ is_published: false }).eq('slug', truckId);
-      if (error) throw error;
-      setTruckPublished(false);
-      toast.success('Menu is no longer public.');
-    } catch (e) {
-      console.error(e);
-      toast.error(e instanceof Error ? e.message : 'Could not unpublish');
+      toast.error(friendlySupabaseError(e, 'Could not update the menu.'));
     } finally {
       setPublishBusy(false);
     }
@@ -484,7 +433,7 @@ const AdminPage = () => {
     if (!file || !uploadingItemId) return;
 
     try {
-      const fileName = `item-${uploadingItemId}-${Date.now()}.${file.name.split('.').pop()}`;
+      const fileName = `${user?.id || 'owner'}/item-${uploadingItemId}-${Date.now()}.${file.name.split('.').pop()}`;
       const { error: uploadError } = await supabase.storage
         .from('menu-images')
         .upload(fileName, file);
@@ -526,14 +475,14 @@ const AdminPage = () => {
             <Button
               variant="ghost"
               size="icon"
-              onClick={() => navigate('/')}
+              onClick={() => navigate('/admin/dashboard')}
               className="text-background hover:bg-background/10"
             >
               <ArrowLeft className="w-5 h-5" />
             </Button>
             <div>
-              <h1 className="text-xl font-bold">Menu Admin</h1>
-              <p className="text-background/70 text-sm">Capture menu from image</p>
+              <h1 className="text-xl font-bold">Menu</h1>
+              <p className="text-background/70 text-sm">Photograph, review, and publish</p>
             </div>
           </div>
           <div className="flex gap-2">
@@ -566,16 +515,15 @@ const AdminPage = () => {
           animate={{ opacity: 1, y: 0 }}
           className="bg-card rounded-2xl border border-border p-4"
         >
-          <label className="block text-sm font-medium text-foreground mb-2">
-            Food Truck ID
-          </label>
-          <input
-            type="text"
-            value={truckId}
-            onChange={(e) => setTruckId(e.target.value)}
-            placeholder="Enter truck ID"
-            className="w-full p-3 rounded-lg border border-border bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
-          />
+          <p className="text-sm font-medium text-foreground">Restaurant</p>
+          {truckId ? (
+            <p className="text-sm text-muted-foreground mt-1 break-all">Menu link: /menu/{truckId}</p>
+          ) : (
+            <div className="mt-2 space-y-2">
+              <p className="text-sm text-muted-foreground">Create your restaurant before editing a menu.</p>
+              <Button onClick={() => navigate('/onboarding')}>Create my digital menu</Button>
+            </div>
+          )}
         </motion.section>
 
         {/* Publish & subscription gate */}
@@ -589,43 +537,17 @@ const AdminPage = () => {
             <h2 className="font-semibold text-foreground">Publish to customers</h2>
           </div>
           <p className="text-sm text-muted-foreground">
-            Until you publish, your menu stays private: it won&apos;t appear on the home page and ordering links
-            show a &quot;not public yet&quot; screen for guests.
+            Status: {menuStatusLabel(menuStatus)}. Draft and paused menus stay private. Publishing is free and turns on the public menu and pickup orders.
           </p>
-          {truckId === 'demo' ? (
-            <p className="text-sm text-amber-700 dark:text-amber-400 bg-amber-500/10 border border-amber-500/20 rounded-lg p-3">
-              Switch <strong>Food Truck ID</strong> to your restaurant slug before publishing. &quot;demo&quot; is the
-              shared sample truck.
-            </p>
-          ) : null}
-          {truckId === 'demo' ? null : truckPublished ? (
+          {!truckId ? null : menuStatus === 'published' ? (
             <div className="flex flex-col sm:flex-row gap-3 sm:items-center">
               <p className="text-sm font-medium text-success">Your menu is live.</p>
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={publishBusy}
-                onClick={() => void handleUnpublishMenu()}
-              >
-                Unpublish
+              <Button variant="outline" size="sm" disabled={publishBusy} onClick={() => void setRestaurantMenuStatus('paused')}>
+                Pause menu
               </Button>
-            </div>
-          ) : !isPaidSubscriptionActive(profile?.subscription_status) ? (
-            <div className="flex flex-col sm:flex-row gap-3">
-              <Button
-                variant="cart"
-                disabled={publishBusy}
-                onClick={() => navigate('/admin/billing')}
-              >
-                <CreditCard className="w-4 h-4 mr-2" />
-                Subscribe to publish
-              </Button>
-              <p className="text-xs text-muted-foreground self-center">
-                Active subscription required to take orders on KioKitchen.
-              </p>
             </div>
           ) : (
-            <Button variant="cart" disabled={publishBusy} onClick={() => void handlePublishMenu()}>
+            <Button variant="cart" disabled={publishBusy} onClick={() => void setRestaurantMenuStatus('published')}>
               {publishBusy ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
               Publish menu
             </Button>
@@ -647,7 +569,7 @@ const AdminPage = () => {
           transition={{ delay: 0.1 }}
           className="bg-card rounded-2xl border border-border p-6"
         >
-          <h2 className="font-semibold text-foreground mb-4">Capture Menu Image</h2>
+          <h2 className="font-semibold text-foreground mb-4">Scan or upload a menu</h2>
 
           {!imagePreview ? (
             <div className="grid grid-cols-2 gap-4">
@@ -662,7 +584,7 @@ const AdminPage = () => {
               <input
                 ref={fileInputRef}
                 type="file"
-                accept="image/*"
+                accept="image/*,application/pdf"
                 onChange={handleFileSelect}
                 className="hidden"
               />
@@ -808,6 +730,9 @@ const AdminPage = () => {
                                   ))}
                                 </select>
                               </div>
+                              {isLowConfidenceItem(item) && (
+                                <p className="text-xs font-medium text-amber-700 dark:text-amber-400">Check this — the price or reading was uncertain</p>
+                              )}
                               {(item.modifiers?.length ?? 0) > 0 && (
                                 <p className="text-xs text-muted-foreground">
                                   {item.modifiers!.length} add-on group(s) from menu — refine under “Current menu” after save.
@@ -902,8 +827,8 @@ const AdminPage = () => {
                     <p className="font-medium text-foreground text-sm truncate">{item.name}</p>
                     <p className="text-xs text-muted-foreground">
                       {item.category} • ${item.price.toFixed(2)}
-                      {Array.isArray(item.modifiers) && (item.modifiers as any[]).length > 0 && (
-                        <span className="text-primary ml-1">• {(item.modifiers as any[]).length} modifier{(item.modifiers as any[]).length > 1 ? 's' : ''}</span>
+                      {Array.isArray(item.modifiers) && item.modifiers.length > 0 && (
+                        <span className="text-primary ml-1">• {item.modifiers.length} modifier{item.modifiers.length > 1 ? 's' : ''}</span>
                       )}
                     </p>
                   </div>
@@ -1001,56 +926,14 @@ const AdminPage = () => {
             <h2 className="font-semibold text-foreground">QR Code for Menu</h2>
           </div>
 
-          <p className="text-sm text-muted-foreground mb-6">
-            Print this QR code and place it at your truck. Customers scan it to open your menu instantly.
-          </p>
-
-          <div className="flex flex-col items-center gap-6">
-            <div id="qr-code-container" className="bg-background p-6 rounded-2xl border border-border shadow-sm">
-              <QRCodeSVG
-                value={`${window.location.origin}/menu/${truckId}`}
-                size={200}
-                level="H"
-                includeMargin
-                className="mx-auto"
-              />
-              <p className="text-center text-xs text-muted-foreground mt-3 font-medium">
-                {truckId}
-              </p>
-            </div>
-
-            <div className="text-center space-y-2">
-              <p className="text-xs text-muted-foreground break-all">
-                {window.location.origin}/menu/{truckId}
-              </p>
-              <Button
-                variant="outline"
-                onClick={() => {
-                  const svg = document.querySelector('#qr-code-container svg');
-                  if (!svg) return;
-                  const svgData = new XMLSerializer().serializeToString(svg);
-                  const canvas = document.createElement('canvas');
-                  const ctx = canvas.getContext('2d');
-                  const img = new Image();
-                  img.onload = () => {
-                    canvas.width = img.width * 2;
-                    canvas.height = img.height * 2;
-                    ctx!.fillStyle = '#ffffff';
-                    ctx!.fillRect(0, 0, canvas.width, canvas.height);
-                    ctx!.drawImage(img, 0, 0, canvas.width, canvas.height);
-                    const a = document.createElement('a');
-                    a.download = `qr-${truckId}.png`;
-                    a.href = canvas.toDataURL('image/png');
-                    a.click();
-                  };
-                  img.src = 'data:image/svg+xml;base64,' + btoa(svgData);
-                }}
-              >
-                <Download className="w-4 h-4 mr-2" />
-                Download QR Code
-              </Button>
-            </div>
-          </div>
+          {truckId ? (
+            <RestaurantQrCard
+              slug={truckId}
+              description="Print this and put it where customers order. A draft or paused menu stays hidden until you publish."
+            />
+          ) : (
+            <p className="text-sm text-muted-foreground">Your QR code appears after the restaurant is created.</p>
+          )}
         </motion.section>
       </div>
 
@@ -1091,7 +974,7 @@ const AdminPage = () => {
               try {
                 const { error } = await supabase
                   .from('menu_items')
-                  .update({ modifiers: modifiers as any })
+                  .update({ modifiers: modifiers as unknown as Json })
                   .eq('id', editingModifiersItem.id);
                 if (error) throw error;
                 setExistingItems((items) =>

@@ -12,6 +12,10 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { MapPin, Clock, Loader2, ArrowLeft, AlertTriangle, Lock } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { track } from '@/lib/analytics';
+import { useVoiceSettings } from '@/hooks/useVoiceSettings';
+import { VoiceCashier } from '@/components/voice/VoiceCashier';
+import { supabase } from '@/integrations/supabase/client';
 const LOADING_STUCK_AFTER_MS = 18_000;
 
 const MenuPage = () => {
@@ -30,7 +34,9 @@ const MenuPage = () => {
     error,
     usingFallback,
     menuNotLive,
+    isPublished,
   } = useMenuItems(truckId);
+  const voice = useVoiceSettings(truckId);
 
   const clearCart = useCartStore((s) => s.clearCart);
   const prevTruckIdRef = useRef<string | undefined>(undefined);
@@ -39,6 +45,9 @@ const MenuPage = () => {
   const [selectedItem, setSelectedItem] = useState<MenuItem | null>(null);
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [loadingStuck, setLoadingStuck] = useState(false);
+  const [orderMode, setOrderMode] = useState<'choose' | 'browse' | 'voice'>(truckId === 'demo' ? 'choose' : 'browse');
+  const [locale, setLocale] = useState<'en' | 'es'>(() => (typeof sessionStorage !== 'undefined' && sessionStorage.getItem('kk-locale') === 'es' ? 'es' : 'en'));
+  const [labels, setLabels] = useState<Record<string, { name?: string; description?: string }>>({});
 
   // Switching trucks (e.g. Try Demo after browsing another menu) must not keep the old cart or UI state.
   useEffect(() => {
@@ -46,10 +55,39 @@ const MenuPage = () => {
       clearCart();
       setActiveCategory('');
       setSelectedItem(null);
+      setOrderMode(truckId === 'demo' ? 'choose' : 'browse');
       setIsCartOpen(false);
     }
     prevTruckIdRef.current = truckId;
   }, [truckId, clearCart]);
+
+  useEffect(() => {
+    sessionStorage.setItem('kk-locale', locale);
+    if (locale === 'en') {
+      setLabels({});
+      return;
+    }
+    let cancelled = false;
+    void supabase
+      .from('menu_translations')
+      .select('entity_id, field, text')
+      .eq('restaurant_slug', truckId)
+      .eq('locale', 'es')
+      .then(({ data, error: translationError }) => {
+        if (cancelled || translationError || !data) return;
+        const next: Record<string, { name?: string; description?: string }> = {};
+        for (const row of data) {
+          if (row.field !== 'name' && row.field !== 'description') continue;
+          const bucket = next[row.entity_id] ?? {};
+          bucket[row.field] = row.text;
+          next[row.entity_id] = bucket;
+        }
+        setLabels(next);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [locale, truckId]);
 
   // Set initial category when categories load
   useEffect(() => {
@@ -73,6 +111,12 @@ const MenuPage = () => {
       console.info('[MenuPage] ready', { truckId, usingFallback, hasError: Boolean(error) });
     }
   }, [isLoading, truckId, usingFallback, error]);
+
+  useEffect(() => {
+    if (!isLoading && isPublished && !menuNotLive && !error) {
+      track('public_menu_viewed', { restaurant_slug: truckId });
+    }
+  }, [isLoading, isPublished, menuNotLive, error, truckId]);
 
   if (isLoading && loadingStuck) {
     return (
@@ -118,8 +162,8 @@ const MenuPage = () => {
             <Lock className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
             <h1 className="text-xl font-semibold text-foreground">This menu isn&apos;t public yet</h1>
             <p className="mt-3 text-sm text-muted-foreground">
-              The restaurant finishes onboarding with a subscription, then publishes from Menu Admin. Check back
-              soon or browse other restaurants from the home page.
+              This menu is still a draft or the restaurant has paused it. Check back soon, or browse other restaurants
+              from the home page.
             </p>
             <Button className="mt-6" onClick={() => navigate('/')}>
               Back to home
@@ -130,6 +174,25 @@ const MenuPage = () => {
     );
   }
 
+  if (error && truckId !== 'demo') {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center p-6">
+        <div className="max-w-md rounded-2xl border border-border bg-card p-8 text-center shadow-sm">
+          <AlertTriangle className="w-10 h-10 text-amber-500 mx-auto mb-3" />
+          <h1 className="text-lg font-semibold text-foreground">Menu unavailable</h1>
+          <p className="mt-2 text-sm text-muted-foreground">{error}</p>
+          <div className="mt-4 flex justify-center gap-3">
+            <Button onClick={() => window.location.reload()}>Try again</Button>
+            <Button variant="outline" onClick={() => navigate('/')}>Home</Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  const previewOnly = truckId !== 'demo' && !isPublished;
+  const voiceOn = voice.ready && voice.enabled && !previewOnly;
+  const mode = voiceOn ? orderMode : 'browse';
   const menuItems = items.filter((item) => item.category === activeCategory);
 
   const handleCheckout = () => {
@@ -139,13 +202,23 @@ const MenuPage = () => {
 
   return (
     <div className="min-h-screen bg-background pb-24">
+      {previewOnly && (
+        <div className="px-4 pt-4">
+          <Alert>
+            <AlertTitle>Preview</AlertTitle>
+            <AlertDescription>
+              Customers can’t see this yet. Publish the menu when you’re ready, then share the QR code.
+            </AlertDescription>
+          </Alert>
+        </div>
+      )}
       {(error || usingFallback) && (
         <div className="px-4 pt-4 safe-top">
           <Alert variant={error ? 'destructive' : 'default'} className="text-left">
             <AlertTriangle className="h-4 w-4" />
             <AlertTitle>{error ? 'Menu could not load from the server' : 'Sample menu'}</AlertTitle>
             <AlertDescription className="mt-1 space-y-2">
-              <p>{error ?? 'Showing demo items until live data is available for this truck.'}</p>
+              <p>{error ?? 'Showing the sample menu.'}</p>
               <Button variant="outline" size="sm" onClick={() => window.location.reload()}>
                 Retry
               </Button>
@@ -189,6 +262,40 @@ const MenuPage = () => {
         </motion.div>
       </header>
 
+      {voiceOn && mode === 'choose' && (
+        <div className="p-4 grid gap-3">
+          <button
+            type="button"
+            className="kk-card p-5 text-left"
+            onClick={() => setOrderMode('browse')}
+          >
+            <div className="text-lg font-semibold">Browse menu</div>
+            <p className="text-sm text-muted-foreground mt-1">See every item, price, and option.</p>
+          </button>
+          <button
+            type="button"
+            className="rounded-2xl border border-foreground/15 bg-secondary p-5 text-left"
+            onClick={() => setOrderMode('voice')}
+          >
+            <div className="text-lg font-semibold">Order by voice</div>
+            <p className="text-sm text-muted-foreground mt-1">Tell me what you'd like. You can still browse.</p>
+          </button>
+        </div>
+      )}
+
+      {voiceOn && mode === 'voice' && (
+        <VoiceCashier slug={truckId} locale={locale} onBrowse={() => setOrderMode('browse')} />
+      )}
+
+      {mode === 'browse' && (
+      <>
+      <div className="px-4 pt-4 flex flex-wrap items-center gap-2">
+        <div className="flex rounded-lg border border-border overflow-hidden text-sm">
+          <button type="button" className={`px-3 py-1.5 ${locale === 'en' ? 'bg-primary text-primary-foreground' : ''}`} onClick={() => setLocale('en')}>English</button>
+          <button type="button" className={`px-3 py-1.5 ${locale === 'es' ? 'bg-primary text-primary-foreground' : ''}`} onClick={() => setLocale('es')}>Español</button>
+        </div>
+        {voiceOn && <Button variant="outline" onClick={() => setOrderMode('voice')}>Order by voice</Button>}
+      </div>
       {/* Category Tabs */}
       <div className="sticky top-0 bg-background/95 backdrop-blur-sm border-b border-border z-30 px-4">
         <CategoryTabs
@@ -216,21 +323,32 @@ const MenuPage = () => {
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: index * 0.05 }}
               >
-                <MenuItemCard item={item} onSelect={setSelectedItem} />
+                <MenuItemCard
+                  item={item}
+                  displayName={labels[item.id]?.name}
+                  displayDescription={labels[item.id]?.description}
+                  onSelect={setSelectedItem}
+                />
               </motion.div>
             ))}
           </motion.div>
         </AnimatePresence>
       </div>
 
-      {/* Cart Button */}
-      <CartButton onClick={() => setIsCartOpen(true)} />
+      </>
+      )}
+
+      {/* Cart stays off unpublished previews so a draft cannot be ordered. */}
+      {mode === 'browse' && !previewOnly && <CartButton onClick={() => setIsCartOpen(true)} />}
 
       {/* Item Customizer Modal */}
       <AnimatePresence>
         {selectedItem && (
           <ItemCustomizer
             item={selectedItem}
+            displayName={labels[selectedItem.id]?.name}
+            displayDescription={labels[selectedItem.id]?.description}
+            labels={Object.fromEntries(Object.entries(labels).flatMap(([id, value]) => value.name ? [[id, value.name]] : []))}
             onClose={() => setSelectedItem(null)}
           />
         )}

@@ -60,16 +60,18 @@ function mergeAbortSignals(signals: AbortSignal[]): AbortSignal {
  * Auth-js JWKS cache TTL is 10m — stalls around that time often trace to unbounded fetch waits.
  */
 function supabaseFetch(url: RequestInfo | URL, init?: RequestInit): Promise<Response> {
-  const headers = new Headers(init?.headers);
-  headers.set("Cache-Control", "no-cache");
-  headers.set("Pragma", "no-cache");
-
   const href =
     typeof url === "string"
       ? url
       : url instanceof Request
         ? url.url
         : url.href;
+  const headers = new Headers(init?.headers);
+  // Edge Functions reject the browser preflight if these extra headers are not allow-listed.
+  if (!href.includes("/functions/v1/")) {
+    headers.set("Cache-Control", "no-cache");
+    headers.set("Pragma", "no-cache");
+  }
 
   let deadlineMs = 55_000;
   if (href.includes("/auth/v1/")) {

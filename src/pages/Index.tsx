@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { motion } from 'framer-motion';
-import { QrCode, Smartphone, ChefHat, Zap, CreditCard, Clock, Settings, LayoutDashboard, Store, ArrowRight, Loader2 } from 'lucide-react';
+import { QrCode, Smartphone, ChefHat, Zap, Clock, Settings, Store, ArrowRight, Loader2 } from 'lucide-react';
 import { SUPABASE_CONNECTIVITY_HINT, supabase } from '@/integrations/supabase/client';
 
 interface TruckListing {
@@ -44,6 +44,16 @@ const Index = () => {
 
         if (!active) return;
 
+        if (error && /is_published/i.test(error.message)) {
+          const demo = await supabase
+            .from('food_trucks')
+            .select('slug, name, description, logo_url, accent_color, location')
+            .eq('is_active', true)
+            .eq('slug', 'demo');
+          if (demo.error) throw demo.error;
+          setTrucks((demo.data as TruckListing[]) || []);
+          return;
+        }
         if (error) {
           throw error;
         }
@@ -74,82 +84,47 @@ const Index = () => {
   return (
     <div className="min-h-screen bg-background">
       {/* Hero Section */}
-      <section className="relative overflow-hidden">
-        <div className="absolute inset-0 bg-gradient-to-br from-primary via-primary/95 to-primary/85" />
-        <div className="absolute inset-0 opacity-[0.07]" style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='1'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")` }} />
-        <div className="absolute inset-0 bg-gradient-to-t from-primary/40 via-transparent to-transparent" />
-        
-        <div className="relative z-10 px-6 py-20 md:py-32 text-center max-w-4xl mx-auto safe-top">
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6 }}
-          >
-            <div className="flex justify-center mb-6">
-              <img
-                src="/logo.png"
-                alt="KioKitchen"
-                className="h-16 md:h-20 w-auto object-contain max-w-[180px]"
-                width={160}
-                height={160}
-                decoding="async"
-              />
+      <section className="px-6 pt-10 pb-16 md:pt-16 safe-top">
+        <div className="max-w-5xl mx-auto">
+          <div className="flex justify-center mb-8">
+            <img src="/logo.png?v=3" alt="KioKitchen" className="h-40 md:h-48 w-auto max-w-[min(100%,36rem)] object-contain mx-auto" width={1024} height={512} decoding="async" />
+          </div>
+          <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.45 }} className="text-center">
+            <p className="kk-kicker mb-4">Restaurant ordering</p>
+            <h1 className="kk-display mx-auto max-w-4xl">Turn your paper menu into a digital ordering system</h1>
+            <p className="mt-5 text-lg md:text-xl text-muted-foreground max-w-2xl mx-auto">Scan your menu. AI builds it. Customers order. You get paid.</p>
+            <div className="mt-8 flex flex-col sm:flex-row gap-3 justify-center">
+              <Button size="xl" onClick={() => navigate('/signup')}>Create my digital menu</Button>
+              <Button size="xl" variant="outline" onClick={() => document.getElementById('how-it-works')?.scrollIntoView({ behavior: 'smooth' })}>See how it works</Button>
             </div>
-            <div className="inline-flex items-center gap-2 bg-primary/20 backdrop-blur-sm px-4 py-2 rounded-full text-primary-foreground/90 text-sm mb-6 border border-primary/30">
-              <Zap className="w-4 h-4" />
-              Turn Every Phone Into an Ordering Terminal
-            </div>
-            
-            <h1 className="text-4xl md:text-6xl font-bold text-primary-foreground mb-6 leading-tight">
-              KioKitchen
-            </h1>
-            <p className="text-xl md:text-2xl text-primary-foreground/80 mb-8 max-w-2xl mx-auto">
-              QR-powered mobile ordering for KioKitchen. Scan, order, and pay – orders go straight to the kitchen.
-            </p>
-
-            <div className="flex flex-col sm:flex-row gap-4 justify-center">
-              <Button
-                size="xl"
-                className="bg-primary-foreground text-primary hover:bg-primary-foreground/90"
-                onClick={() => navigate('/menu/demo')}
-              >
-                <QrCode className="w-5 h-5 mr-2" />
-                Try Demo Menu
-              </Button>
-              <Button
-                variant="outline"
-                size="xl"
-                className="border-2 border-primary-foreground/30 bg-transparent text-primary-foreground hover:bg-primary-foreground/10"
-                onClick={() => navigate('/kitchen')}
-              >
-                <ChefHat className="w-5 h-5 mr-2" />
-                View Kitchen Display
-              </Button>
-              <Button
-                variant="outline"
-                size="xl"
-                className="border-2 border-primary-foreground/30 bg-transparent text-primary-foreground hover:bg-primary-foreground/10"
-                onClick={() => navigate('/login')}
-              >
-                <Settings className="w-5 h-5 mr-2" />
-                Restaurant Login
-              </Button>
-              <Button
-                variant="outline"
-                size="xl"
-                className="border-2 border-primary-foreground/30 bg-transparent text-primary-foreground hover:bg-primary-foreground/10"
-                onClick={() => navigate('/admin/dashboard')}
-              >
-                <LayoutDashboard className="w-5 h-5 mr-2" />
-                System Overview
-              </Button>
+            <div className="mt-5 flex flex-wrap justify-center gap-4 text-sm">
+              <button type="button" className="underline text-muted-foreground" onClick={() => navigate('/menu/demo')}>Try KioKitchen</button>
+              <button type="button" className="underline text-muted-foreground" onClick={() => navigate('/login')}>Restaurant login</button>
             </div>
           </motion.div>
+          <ol className="mt-12 grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
+            {['Scan your menu', 'AI builds it', 'Customers order', 'You get paid'].map((step, index) => (
+              <li key={step} className="kk-card px-3 py-4 text-center">
+                <span className="kk-kicker">{index + 1}</span>
+                <p className="mt-1 font-medium">{step}</p>
+              </li>
+            ))}
+          </ol>
+          <div className="mt-8 grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
+            {[
+              ['QR ordering', '/menu/demo'],
+              ['AI cashier', '/menu/demo'],
+              ['Phone AI', '/signup'],
+              ['Drive-thru', '/signup'],
+            ].map(([label, href]) => (
+              <button key={label} type="button" className="kk-card px-3 py-4 text-center font-medium" onClick={() => navigate(href)}>{label}</button>
+            ))}
+          </div>
         </div>
       </section>
 
       {/* How It Works */}
-      <section className="py-16 px-6">
+      <section id="how-it-works" className="py-16 px-6">
         <div className="max-w-4xl mx-auto">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
@@ -157,26 +132,26 @@ const Index = () => {
             viewport={{ once: true }}
             className="text-center mb-12"
           >
-            <h2 className="text-3xl font-bold text-foreground mb-4">How It Works</h2>
-            <p className="text-muted-foreground">Simple for customers, powerful for your business</p>
+            <h2 className="text-3xl font-bold text-foreground mb-4">How it works</h2>
+            <p className="text-muted-foreground">Set up on your phone. Customers scan and order. No app download.</p>
           </motion.div>
 
           <div className="grid md:grid-cols-3 gap-8">
             {[
               {
                 icon: <QrCode className="w-10 h-10" />,
-                title: 'Scan',
-                description: 'Customer scans your unique QR code with their phone camera',
+                title: 'Photograph your menu',
+                description: 'No typing every item. A photo or PDF is enough to start.',
               },
               {
                 icon: <Smartphone className="w-10 h-10" />,
-                title: 'Order & Pay',
-                description: 'Browse menu, customize items, and pay securely on their phone',
+                title: 'Review and publish',
+                description: 'You edit names, prices, and options. Then you publish a mobile menu and QR code.',
               },
               {
                 icon: <ChefHat className="w-10 h-10" />,
-                title: 'Prepare',
-                description: 'Order appears instantly on your kitchen display system',
+                title: 'Take orders',
+                description: 'Customers scan, choose modifiers, and send the order to your kitchen display.',
               },
             ].map((step, index) => (
               <motion.div
@@ -278,31 +253,36 @@ const Index = () => {
             viewport={{ once: true }}
             className="text-center mb-12"
           >
-            <h2 className="text-3xl font-bold text-foreground mb-4">Built for the Lunch Rush</h2>
-            <p className="text-muted-foreground">Everything you need, nothing you don't</p>
+            <h2 className="text-3xl font-bold text-foreground mb-4">What you get</h2>
+            <p className="text-muted-foreground">A digital menu you control, with ordering when you want it</p>
           </motion.div>
 
           <div className="grid sm:grid-cols-2 gap-6">
             {[
               {
                 icon: <Clock className="w-6 h-6" />,
-                title: 'No Download Required',
-                description: 'PWA loads instantly in the browser. No app store wait times.',
-              },
-              {
-                icon: <CreditCard className="w-6 h-6" />,
-                title: 'Secure Payments',
-                description: 'Apple Pay, Google Pay, and cards. PCI-compliant processing.',
+                title: 'No typing every menu item',
+                description: 'Start from the menu you already printed.',
               },
               {
                 icon: <Zap className="w-6 h-6" />,
-                title: 'Real-Time Updates',
-                description: 'Orders appear on your KDS the moment payment completes.',
+                title: 'Digital menu in minutes',
+                description: 'A photo or PDF becomes items, prices, and categories you can edit.',
               },
               {
                 icon: <Smartphone className="w-6 h-6" />,
-                title: 'No Account Needed',
-                description: 'Customers order without creating an account. Zero friction.',
+                title: 'Customers use their own phones',
+                description: 'They scan a QR code and order in the browser.',
+              },
+              {
+                icon: <QrCode className="w-6 h-6" />,
+                title: 'No special customer app',
+                description: 'Nothing to download. The menu opens where they already are.',
+              },
+              {
+                icon: <Settings className="w-6 h-6" />,
+                title: 'Voice ordering available',
+                description: 'The same menu can take a spoken order at the table, on the phone, or in a drive-thru test lane.',
               },
             ].map((feature, index) => (
               <motion.div
@@ -336,17 +316,17 @@ const Index = () => {
         >
           <div className="absolute inset-0 opacity-[0.07]" style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='1'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")` }} />
           <h2 className="relative text-2xl md:text-3xl font-bold text-accent-foreground mb-4">
-            Ready to Streamline Your Orders?
+            Ready to put your menu online?
           </h2>
           <p className="relative text-accent-foreground/70 mb-8">
-            Try the demo to see how KioKitchen can transform your food truck operation
+            Create an account, photograph your menu, and publish a QR code.
           </p>
           <Button
             size="xl"
             className="relative bg-primary text-primary-foreground hover:bg-primary/90"
-            onClick={() => navigate('/menu/demo')}
+            onClick={() => navigate('/signup')}
           >
-            Launch Demo
+            Create My Digital Menu
           </Button>
         </motion.div>
       </section>
@@ -354,7 +334,7 @@ const Index = () => {
       {/* Footer */}
       <footer className="py-8 px-6 border-t border-border">
         <div className="max-w-4xl mx-auto text-center text-muted-foreground text-sm">
-          <p>KioKitchen • Mobile-First Food Truck Ordering</p>
+          <p>KioKitchen • Digital menus and QR ordering for restaurants</p>
         </div>
       </footer>
     </div>

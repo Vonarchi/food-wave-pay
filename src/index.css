@@ -46,7 +46,12 @@
     --input: 30 20% 88%;
     --ring: 12 93% 50%;
 
-    --radius: 1rem;
+    /* Radius scale. Restaurant accent_color is not a platform token. */
+    --radius: 0.875rem;
+
+    /* Surface hierarchy */
+    --surface: 30 40% 99%;
+    --surface-muted: 32 32% 95%;
 
     /* Custom shadows */
     --shadow-sm: 0 1px 2px 0 hsl(220 20% 15% / 0.05);
@@ -122,6 +127,24 @@
 
   body {
     @apply bg-background text-foreground antialiased;
+  }
+}
+
+@layer components {
+  .kk-kicker {
+    @apply text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground;
+  }
+
+  .kk-display {
+    @apply text-4xl md:text-6xl font-semibold tracking-tight text-foreground text-balance;
+  }
+
+  .kk-card {
+    @apply rounded-2xl border border-border bg-card shadow-sm;
+  }
+
+  .kk-status {
+    @apply inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold;
   }
 }
 

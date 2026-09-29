@@ -1,5 +1,7 @@
 -- Food Wave Pay - Consolidated SQL Schema
--- Run this on a fresh Supabase project to recreate the full schema
+-- DO NOT run this file on the production project.
+-- It recreates the original open RLS policies and omits later auth, Stripe,
+-- publish, and Phase 1 tenant policies. Apply supabase/migrations in order instead.
 
 -- =============================================================================
 -- 1. Helper function for auto-updating timestamps

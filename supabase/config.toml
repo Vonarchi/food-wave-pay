@@ -1,10 +1,27 @@
 project_id = "awryxczjacqrgjlctrjc"
 
 [functions.extract-menu]
-verify_jwt = false
+verify_jwt = true
 
 [functions.stripe-webhook]
 verify_jwt = false
 
 [functions.create-checkout-session]
+verify_jwt = true
+
+# Guests are anonymous. The function checks the restaurant, session, and rate limit itself.
+[functions.voice-order]
+verify_jwt = false
+
+# Phone guests and the carrier webhook are anonymous. Staff actions check the user JWT
+# or DRIVE_THRU_DEVICE_SECRET inside the function.
+[functions.channel-order]
+verify_jwt = false
+
+# Guests pay with an order token. Owner actions check the user JWT inside the function.
+[functions.commerce]
+verify_jwt = false
+
+# Owner briefing. The gateway requires a user JWT, and the function checks restaurant access.
+[functions.insights]
 verify_jwt = true

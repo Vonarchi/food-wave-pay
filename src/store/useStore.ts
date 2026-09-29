@@ -1,6 +1,9 @@
 import { create } from 'zustand';
 import { CartItem, MenuItem, SelectedModifier, Order, OrderStatus } from '@/types';
 import { supabase } from '@/integrations/supabase/client';
+import { createGuestOrderClient } from '@/lib/guestOrders';
+import type { Json } from '@/integrations/supabase/types';
+import { ORDER_TAX_RATE } from '@/lib/ordering/engine';
 
 interface CartState {
   items: CartItem[];
@@ -8,6 +11,7 @@ interface CartState {
   removeItem: (cartItemId: string) => void;
   updateQuantity: (cartItemId: string, quantity: number) => void;
   clearCart: () => void;
+  setItems: (items: CartItem[]) => void;
   getSubtotal: () => number;
   getTax: () => number;
   getTotal: () => number;
@@ -19,14 +23,14 @@ interface OrderState {
   currentOrder: Order | null;
   isLoading: boolean;
   fetchOrders: () => Promise<void>;
-  addOrder: (order: Omit<Order, 'id' | 'orderNumber' | 'createdAt'>) => Promise<Order>;
+  addOrder: (order: Omit<Order, 'id' | 'orderNumber' | 'createdAt'> & { paymentStatus?: string; source?: string }) => Promise<Order & { guestAccessToken: string }>;
   updateOrderStatus: (orderId: string, status: OrderStatus) => Promise<void>;
   setCurrentOrder: (order: Order | null) => void;
   getActiveOrders: () => Order[];
-  setOrders: (orders: Order[]) => void;
+  setOrders: (orders: Order[] | ((current: Order[]) => Order[])) => void;
 }
 
-const TAX_RATE = 0.0825; // 8.25% tax
+const TAX_RATE = ORDER_TAX_RATE;
 
 export const useCartStore = create<CartState>((set, get) => ({
   items: [],
@@ -63,6 +67,8 @@ export const useCartStore = create<CartState>((set, get) => ({
 
   clearCart: () => set({ items: [] }),
 
+  setItems: (items) => set({ items }),
+
   getSubtotal: () => {
     const items = get().items;
     return items.reduce((total, item) => {
@@ -89,17 +95,30 @@ const generateOrderNumber = (): string => {
 };
 
 // Helper to map database row to Order type
-const mapDbRowToOrder = (row: any): Order => ({
+const mapDbRowToOrder = (row: {
+  id: string;
+  order_number: string;
+  truck_id: string;
+  customer_name: string | null;
+  items: Json;
+  subtotal: number;
+  tax: number;
+  total: number;
+  status: string;
+  created_at: string;
+  is_test?: boolean | null;
+}): Order => ({
   id: row.id,
   orderNumber: parseInt(row.order_number, 10),
   truckId: row.truck_id,
   customerName: row.customer_name || undefined,
-  items: row.items as CartItem[],
-  subtotal: parseFloat(row.subtotal),
-  tax: parseFloat(row.tax),
-  total: parseFloat(row.total),
+  items: row.items as unknown as CartItem[],
+  subtotal: Number(row.subtotal),
+  tax: Number(row.tax),
+  total: Number(row.total),
   status: row.status as OrderStatus,
   createdAt: new Date(row.created_at),
+  isTest: row.is_test === true,
 });
 
 export const useOrderStore = create<OrderState>((set, get) => ({
@@ -129,22 +148,31 @@ export const useOrderStore = create<OrderState>((set, get) => ({
     }
   },
 
-  setOrders: (orders) => set({ orders }),
+  setOrders: (orders) =>
+    set((state) => ({
+      orders: typeof orders === 'function' ? orders(state.orders) : orders,
+    })),
 
   addOrder: async (orderData) => {
     const orderNumber = generateOrderNumber();
-    
-    const { data, error } = await supabase
+    const guestAccessToken = crypto.randomUUID();
+    const guest = createGuestOrderClient(guestAccessToken);
+
+    const { data, error } = await guest
       .from('orders')
       .insert({
         order_number: orderNumber,
         truck_id: orderData.truckId,
         customer_name: orderData.customerName || null,
-        items: orderData.items as any,
+        items: orderData.items as unknown as Json,
         subtotal: orderData.subtotal,
         tax: orderData.tax,
         total: orderData.total,
-        status: orderData.status,
+        status: orderData.status || 'received',
+        guest_access_token: guestAccessToken,
+        ...(orderData.paymentStatus ? { payment_status: orderData.paymentStatus } : {}),
+        ...(orderData.source ? { source: orderData.source } : {}),
+        ...(orderData.isTest ? { is_test: true } : {}),
       })
       .select()
       .single();
@@ -159,8 +187,8 @@ export const useOrderStore = create<OrderState>((set, get) => ({
       orders: [newOrder, ...state.orders],
       currentOrder: newOrder,
     }));
-    
-    return newOrder;
+
+    return { ...newOrder, guestAccessToken };
   },
 
   updateOrderStatus: async (orderId, status) => {

@@ -1,7 +1,7 @@
 {
-  "name": "KioKitchen - Food Truck Ordering",
+  "name": "KioKitchen",
   "short_name": "KioKitchen",
-  "description": "Order food from KioKitchen instantly",
+  "description": "Scan your menu and publish a QR ordering page",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#FDF8F4",

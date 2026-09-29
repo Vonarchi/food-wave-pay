@@ -21,6 +21,8 @@ export type DraftMenuItem = {
   price: number;
   category: string;
   modifier_groups?: ApiModifierGroup[];
+  /** 0–1 when the extractor reports it. Missing means unknown, not low. */
+  confidence?: number;
 };
 
 function stableId(prefix: string, i: number, j?: number) {
@@ -64,6 +66,7 @@ type LegacyRow = {
   category?: string;
   category_name?: string;
   modifier_groups?: ApiModifierGroup[];
+  confidence?: number;
 };
 
 function pickLegacyName(row: LegacyRow): string {
@@ -73,6 +76,12 @@ function pickLegacyName(row: LegacyRow): string {
     if (s) return s;
   }
   return '';
+}
+
+function coerceConfidence(value: unknown): number | undefined {
+  if (typeof value !== 'number' || Number.isNaN(value)) return undefined;
+  if (value < 0 || value > 1) return undefined;
+  return value;
 }
 
 function coerceLegacyPrice(value: unknown): number {
@@ -95,6 +104,7 @@ function rowToDraft(row: LegacyRow, fallbackCategory: string): DraftMenuItem | n
     price,
     category,
     modifier_groups: row.modifier_groups,
+    confidence: coerceConfidence(row.confidence),
   };
 }
 

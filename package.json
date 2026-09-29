@@ -9,6 +9,7 @@
     "build": "vite build",
     "build:dev": "vite build --mode development",
     "lint": "eslint .",
+    "test": "node --experimental-strip-types --test src/lib/restaurant.test.ts src/lib/orderingEngine.test.ts src/lib/channel.test.ts src/lib/phase4.test.ts src/lib/insights.test.ts",
     "preview": "vite preview"
   },
   "dependencies": {

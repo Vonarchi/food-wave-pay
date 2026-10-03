@@ -47,6 +47,56 @@ export function draftsToImportedItems(drafts: DraftMenuItem[]): ImportedMenuItem
   }));
 }
 
+async function fileToBase64(file: File): Promise<string> {
+  const buffer = await file.arrayBuffer();
+  const bytes = new Uint8Array(buffer);
+  let binary = '';
+  const chunk = 0x8000;
+  for (let i = 0; i < bytes.length; i += chunk) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + chunk));
+  }
+  return btoa(binary);
+}
+
+async function parseExtractResponse(invokeResult: {
+  data: { error?: unknown; items?: unknown } | null;
+  error: Error | null;
+  response?: Response;
+}): Promise<ImportedMenuItem[]> {
+  if (invokeResult.error) {
+    const detail = await formatEdgeFunctionFailure(invokeResult.error, invokeResult.response);
+    throw new Error(detail || 'Menu reading failed. Try a clearer photo.');
+  }
+
+  if (invokeResult.data?.error && (!Array.isArray(invokeResult.data?.items) || invokeResult.data.items.length === 0)) {
+    const raw = invokeResult.data.error;
+    throw new Error(typeof raw === 'string' ? raw : 'No menu items could be read. Try a clearer photo.');
+  }
+
+  const items = draftsToImportedItems(normalizeExtractionPayload(invokeResult.data?.items));
+  if (items.length === 0) {
+    throw new Error('No menu items could be read. Retake the photo so prices and names are easy to see.');
+  }
+  return items;
+}
+
+/**
+ * Flyer / scan-first path: no account yet. Sends the photo as base64 so Gemini can
+ * build a draft menu before signup. Does not write menu_items or storage.
+ */
+export async function importMenuFromGuestFile(file: File): Promise<ImportedMenuItem[]> {
+  assertMenuFile(file);
+  const imageBase64 = await fileToBase64(file);
+  const invokeResult = await supabase.functions.invoke('extract-menu', {
+    body: {
+      imageBase64,
+      mimeType: file.type || (file.name.toLowerCase().endsWith('.pdf') ? 'application/pdf' : 'image/jpeg'),
+    },
+    timeout: MENU_EXTRACTION_TIMEOUT_MS,
+  });
+  return parseExtractResponse(invokeResult);
+}
+
 /** Uploads into menu-images/{userId}/ and returns unreviewed draft items. Does not write menu_items. */
 export async function importMenuFromFile(file: File, userId: string): Promise<ImportedMenuItem[]> {
   assertMenuFile(file);
@@ -73,19 +123,5 @@ export async function importMenuFromFile(file: File, userId: string): Promise<Im
     timeout: MENU_EXTRACTION_TIMEOUT_MS,
   });
 
-  if (invokeResult.error) {
-    const detail = await formatEdgeFunctionFailure(invokeResult.error, invokeResult.response);
-    throw new Error(detail || 'Menu reading failed. Try a clearer photo.');
-  }
-
-  if (invokeResult.data?.error && (!Array.isArray(invokeResult.data?.items) || invokeResult.data.items.length === 0)) {
-    const raw = invokeResult.data.error;
-    throw new Error(typeof raw === 'string' ? raw : 'No menu items could be read. Try a clearer photo.');
-  }
-
-  const items = draftsToImportedItems(normalizeExtractionPayload(invokeResult.data?.items));
-  if (items.length === 0) {
-    throw new Error('No menu items could be read. Retake the photo so prices and names are easy to see.');
-  }
-  return items;
+  return parseExtractResponse(invokeResult);
 }

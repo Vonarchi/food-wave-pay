@@ -8,6 +8,7 @@ import { SupabaseEnvBanner } from '@/components/SupabaseEnvBanner';
 import { ConnectivityErrorHint } from '@/components/ConnectivityErrorHint';
 import { track } from '@/lib/analytics';
 import { readCampaign } from '@/lib/commerce';
+import { hasScanDraft, loadScanDraft } from '@/lib/scanDraft';
 import { supabase } from '@/integrations/supabase/client';
 
 const SignupPage = () => {
@@ -19,6 +20,8 @@ const SignupPage = () => {
   const [fullName, setFullName] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const fromScan = searchParams.get('from') === 'scan' || hasScanDraft();
+  const scanCount = loadScanDraft()?.items.length ?? 0;
 
   useEffect(() => {
     track('signup_started');
@@ -81,8 +84,14 @@ const SignupPage = () => {
               width={640}
               height={320}
             />
-            <h1 className="text-2xl font-bold text-foreground">Create Account</h1>
-            <p className="text-muted-foreground mt-1">Start your restaurant ordering setup</p>
+            <h1 className="text-2xl font-bold text-foreground">
+              {fromScan ? 'Keep your menu' : 'Create Account'}
+            </h1>
+            <p className="text-muted-foreground mt-1">
+              {fromScan
+                ? `Create an account to save ${scanCount > 0 ? `${scanCount} scanned items` : 'your scanned menu'} and finish setup.`
+                : 'Start your restaurant ordering setup'}
+            </p>
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-4" autoComplete="off">
@@ -148,6 +157,8 @@ const SignupPage = () => {
                   <Loader2 className="w-5 h-5 animate-spin" />
                   Creating account...
                 </>
+              ) : fromScan ? (
+                'Create account & keep menu'
               ) : (
                 'Create Account'
               )}

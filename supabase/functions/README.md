@@ -12,7 +12,9 @@ supabase secrets set GOOGLE_GEMINI_API_KEY=your_key
 supabase functions deploy extract-menu
 ```
 
-The function requires a signed-in user (`verify_jwt = true`) and only accepts a file URL under `menu-images/{that user's id}/`. Redeploy after pulling Phase 1 or menu scan returns 401.
+Signed-in scans still require a file URL under `menu-images/{that user's id}/`.
+
+**Guest / flyer scan-first:** `POST` with `{ "imageBase64": "...", "mimeType": "image/jpeg" }` (no storage upload). Rate-limited by IP. Used by `/scan` before signup. Redeploy `extract-menu` after pulling this change.
 
 Create the key in [Google AI Studio](https://aistudio.google.com/apikey) (not a random Google Cloud key unless it has Generative Language API enabled). If Gemini returns **API_KEY_INVALID**, replace the secret with a new AI Studio key and redeploy.
 

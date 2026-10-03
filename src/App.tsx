@@ -27,6 +27,7 @@ import AnalyticsPage from "./pages/AnalyticsPage";
 import StaffPage from "./pages/StaffPage";
 import PlatformAdminPage from "./pages/PlatformAdminPage";
 import StartPage from "./pages/StartPage";
+import ScanFirstPage from "./pages/ScanFirstPage";
 import InsightsPage from "./pages/InsightsPage";
 import NotFound from "./pages/NotFound";
 
@@ -42,6 +43,7 @@ const App = () => (
           {/* Public routes — no auth required */}
           <Route path="/" element={<Index />} />
           <Route path="/start" element={<StartPage />} />
+          <Route path="/scan" element={<ScanFirstPage />} />
           <Route path="/menu/:truckId" element={<MenuPage />} />
           <Route path="/order/:truckId" element={<MenuPage />} />
           <Route path="/checkout/:truckId" element={<CheckoutPage />} />

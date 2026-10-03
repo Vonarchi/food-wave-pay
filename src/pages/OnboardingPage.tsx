@@ -16,6 +16,7 @@ import {
   slugifyRestaurantName,
   type MenuStatus,
 } from '@/lib/restaurant';
+import { clearScanDraft, loadScanDraft } from '@/lib/scanDraft';
 import { RestaurantQrCard } from '@/components/restaurant/RestaurantQrCard';
 import type { Json } from '@/integrations/supabase/types';
 
@@ -42,11 +43,20 @@ const OnboardingPage = () => {
   const [drafts, setDrafts] = useState<ImportedMenuItem[]>([]);
   const [savedCount, setSavedCount] = useState(0);
   const [logoFile, setLogoFile] = useState<File | null>(null);
+  const [fromScanDraft, setFromScanDraft] = useState(false);
 
   const categories = useMemo(
     () => [...new Set(drafts.map((item) => item.category).filter(Boolean))],
     [drafts]
   );
+
+  useEffect(() => {
+    const draft = loadScanDraft();
+    if (!draft?.items.length) return;
+    setDrafts(draft.items);
+    setFromScanDraft(true);
+    setStep(0);
+  }, []);
 
   useEffect(() => {
     if (profile?.restaurant_name) setRestaurantName(profile.restaurant_name);
@@ -148,7 +158,8 @@ const OnboardingPage = () => {
         if (logoError) throw logoError;
       }
       toast.success('Restaurant saved');
-      setStep(1);
+      // Flyer scan-first: skip the camera step and jump to review of the claimed draft.
+      setStep(fromScanDraft && drafts.length > 0 ? 2 : 1);
     } catch (error) {
       toast.error(friendlySupabaseError(error, 'Could not save the restaurant.'));
     } finally {
@@ -209,6 +220,8 @@ const OnboardingPage = () => {
       );
       if (error) throw error;
       setSavedCount(ready.length);
+      clearScanDraft();
+      setFromScanDraft(false);
       track('menu_review_completed', { restaurant_slug: slug, item_count: ready.length });
       toast.success('Menu saved. Nothing is public until you publish.');
       setStep(3);
@@ -261,7 +274,11 @@ const OnboardingPage = () => {
         {step === 0 && (
           <div className="space-y-4">
             <h1 className="text-2xl font-bold">Create your restaurant</h1>
-            <p className="text-sm text-muted-foreground">This is what customers see at the top of your menu.</p>
+            <p className="text-sm text-muted-foreground">
+              {fromScanDraft
+                ? `We saved your ${drafts.length}-item scan. Add your restaurant details, then review the menu.`
+                : 'This is what customers see at the top of your menu.'}
+            </p>
             <label className="block text-sm font-medium">Restaurant name</label>
             <input className="w-full p-3 text-base rounded-lg border border-border bg-background" value={restaurantName} onChange={(e) => setRestaurantName(e.target.value)} placeholder="Mario's Pizza" />
             <label className="block text-sm font-medium">Address or area</label>

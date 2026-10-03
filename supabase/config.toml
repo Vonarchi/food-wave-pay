@@ -1,7 +1,9 @@
 project_id = "awryxczjacqrgjlctrjc"
 
+# Guest flyer scans send the anon key (no user session). Auth for signed-in
+# storage URLs is enforced inside the function.
 [functions.extract-menu]
-verify_jwt = true
+verify_jwt = false
 
 [functions.stripe-webhook]
 verify_jwt = false

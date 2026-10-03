@@ -215,6 +215,44 @@ Rules:
 - If the menu shows add-ons, include "modifier_groups": [{ "name": "Size", "required": true, "max_select": 1, "options": [{ "name": "Large", "price_delta": 2 }] }].
 - Put all dishes inside the "menu_items" array only.`;
 
+/** In-memory guest scan limits (per isolate). Flyer QR path sends base64 before signup. */
+const guestScanHits = new Map<string, { count: number; resetAt: number }>();
+const GUEST_SCAN_LIMIT = 8;
+const GUEST_SCAN_WINDOW_MS = 60 * 60 * 1000;
+
+function clientIp(req: Request): string {
+  const forwarded = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "";
+  return forwarded || req.headers.get("cf-connecting-ip") || "unknown";
+}
+
+function allowGuestScan(ip: string): boolean {
+  const now = Date.now();
+  const row = guestScanHits.get(ip);
+  if (!row || now >= row.resetAt) {
+    guestScanHits.set(ip, { count: 1, resetAt: now + GUEST_SCAN_WINDOW_MS });
+    return true;
+  }
+  if (row.count >= GUEST_SCAN_LIMIT) return false;
+  row.count += 1;
+  return true;
+}
+
+function decodeDataUrlOrBase64(raw: string): { bytes: Uint8Array; mimeType: string } | null {
+  const trimmed = raw.trim();
+  const dataUrl = trimmed.match(/^data:([^;]+);base64,(.+)$/i);
+  const mimeType = dataUrl?.[1] || "";
+  const b64 = dataUrl?.[2] || trimmed;
+  if (!b64 || b64.length > 12_000_000) return null;
+  try {
+    const binary = atob(b64);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+    return { bytes, mimeType: mimeType || "image/jpeg" };
+  } catch {
+    return null;
+  }
+}
+
 serve(async (req) => {
   console.log("[extract-menu] incoming", req.method, new Date().toISOString());
 
@@ -224,35 +262,52 @@ serve(async (req) => {
 
   try {
     let imageUrl: string | undefined;
+    let imageBase64: string | undefined;
+    let mimeHint: string | undefined;
 
     try {
       const body = await req.json();
       imageUrl = body?.imageUrl ?? body?.image_url;
+      imageBase64 = typeof body?.imageBase64 === "string"
+        ? body.imageBase64
+        : typeof body?.image_base64 === "string"
+          ? body.image_base64
+          : undefined;
+      mimeHint = typeof body?.mimeType === "string"
+        ? body.mimeType
+        : typeof body?.mime_type === "string"
+          ? body.mime_type
+          : undefined;
     } catch {
       return jsonResponse({ error: "Invalid JSON body" }, 400);
     }
 
-    if (!imageUrl || typeof imageUrl !== "string" || !imageUrl.startsWith("http")) {
-      return jsonResponse({ error: "Image URL is required and must be a valid HTTP(S) URL" }, 400);
-    }
+    const guestMode = Boolean(imageBase64 && typeof imageBase64 === "string");
+    if (!guestMode) {
+      if (!imageUrl || typeof imageUrl !== "string" || !imageUrl.startsWith("http")) {
+        return jsonResponse({ error: "Image URL is required and must be a valid HTTP(S) URL" }, 400);
+      }
 
-    const authHeader = req.headers.get("Authorization");
-    if (!authHeader?.startsWith("Bearer ")) {
-      return jsonResponse({ error: "Sign in before scanning a menu." }, 401);
-    }
-    const supabase = createClient(
-      Deno.env.get("SUPABASE_URL") ?? "",
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
-    );
-    const { data: userData, error: userError } = await supabase.auth.getUser(
-      authHeader.replace("Bearer ", ""),
-    );
-    if (userError || !userData.user) {
-      return jsonResponse({ error: "Sign in before scanning a menu." }, 401);
-    }
-    const storagePrefix = `${Deno.env.get("SUPABASE_URL")}/storage/v1/object/public/menu-images/${userData.user.id}/`;
-    if (!imageUrl.startsWith(storagePrefix)) {
-      return jsonResponse({ error: "Menu file must be uploaded to your account first." }, 400);
+      const authHeader = req.headers.get("Authorization");
+      if (!authHeader?.startsWith("Bearer ")) {
+        return jsonResponse({ error: "Sign in before scanning a menu." }, 401);
+      }
+      const supabase = createClient(
+        Deno.env.get("SUPABASE_URL") ?? "",
+        Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
+      );
+      const { data: userData, error: userError } = await supabase.auth.getUser(
+        authHeader.replace("Bearer ", ""),
+      );
+      if (userError || !userData.user) {
+        return jsonResponse({ error: "Sign in before scanning a menu." }, 401);
+      }
+      const storagePrefix = `${Deno.env.get("SUPABASE_URL")}/storage/v1/object/public/menu-images/${userData.user.id}/`;
+      if (!imageUrl.startsWith(storagePrefix)) {
+        return jsonResponse({ error: "Menu file must be uploaded to your account first." }, 400);
+      }
+    } else if (!allowGuestScan(clientIp(req))) {
+      return jsonResponse({ error: "Too many menu scans from this device. Create an account to continue." }, 429);
     }
 
     const rawKey =
@@ -269,29 +324,42 @@ serve(async (req) => {
       );
     }
 
-    console.log("[extract-menu] imageUrl received");
+    let imageBytes: Uint8Array;
+    let mimeType: string;
 
-    let imageResponse: Response;
-    try {
-      imageResponse = await fetchWithTimeout(
-        imageUrl,
-        { headers: { "User-Agent": "KioKitchen-ExtractMenu/1.0" } },
-        20000,
-      );
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Failed to fetch image";
-      return jsonResponse({ error: `Image fetch failed: ${message}` }, 502);
+    if (guestMode && imageBase64) {
+      console.log("[extract-menu] guest base64 scan");
+      const decoded = decodeDataUrlOrBase64(imageBase64);
+      if (!decoded) {
+        return jsonResponse({ error: "Invalid menu image data." }, 400);
+      }
+      imageBytes = decoded.bytes;
+      mimeType = mimeHint || decoded.mimeType || "image/jpeg";
+    } else {
+      console.log("[extract-menu] imageUrl received");
+      let imageResponse: Response;
+      try {
+        imageResponse = await fetchWithTimeout(
+          imageUrl!,
+          { headers: { "User-Agent": "KioKitchen-ExtractMenu/1.0" } },
+          20000,
+        );
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Failed to fetch image";
+        return jsonResponse({ error: `Image fetch failed: ${message}` }, 502);
+      }
+
+      if (!imageResponse.ok) {
+        return jsonResponse(
+          { error: `Image fetch failed: ${imageResponse.status} ${imageResponse.statusText}` },
+          502,
+        );
+      }
+
+      imageBytes = new Uint8Array(await imageResponse.arrayBuffer());
+      mimeType = imageResponse.headers.get("content-type") || "image/jpeg";
     }
 
-    if (!imageResponse.ok) {
-      return jsonResponse(
-        { error: `Image fetch failed: ${imageResponse.status} ${imageResponse.statusText}` },
-        502,
-      );
-    }
-
-    const imageBytes = new Uint8Array(await imageResponse.arrayBuffer());
-    const mimeType = imageResponse.headers.get("content-type") || "image/jpeg";
     const isPdf = mimeType.includes("pdf");
     const maxBytes = isPdf ? 8 * 1024 * 1024 : 4 * 1024 * 1024;
     if (imageBytes.length > maxBytes) {

@@ -56,7 +56,14 @@ export function restaurantMenuUrl(origin: string, slug: string): string {
 }
 
 export function friendlySupabaseError(error: unknown, fallback: string): string {
-  const message = error instanceof Error ? error.message : typeof error === 'string' ? error : fallback;
+  const message =
+    error instanceof Error
+      ? error.message
+      : typeof error === 'string'
+        ? error
+        : error && typeof error === 'object' && 'message' in error && typeof (error as { message: unknown }).message === 'string'
+          ? (error as { message: string }).message
+          : fallback;
   const lower = message.toLowerCase();
   if (lower.includes('duplicate') || lower.includes('unique') || lower.includes('23505')) {
     return 'That restaurant link is already taken. Try a slightly different name.';
@@ -66,6 +73,9 @@ export function friendlySupabaseError(error: unknown, fallback: string): string 
   }
   if (lower.includes('timed out') || lower.includes('failed to fetch') || lower.includes('network')) {
     return 'The connection dropped. Check your signal and try again.';
+  }
+  if (lower.includes('does not exist') || lower.includes('42703')) {
+    return 'The restaurant database is missing a required field. Ask support to apply the latest migrations.';
   }
   if (lower.includes('restaurant link cannot be changed') || lower.includes('restaurant owner cannot be changed')) {
     return 'This restaurant link is already saved and can’t be reassigned.';

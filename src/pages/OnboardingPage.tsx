@@ -91,15 +91,8 @@ const OnboardingPage = () => {
     }
     setSaving(true);
     try {
-      const { error: profileError } = await supabase.from('profiles').upsert({
-        id: user.id,
-        full_name: profile?.full_name || null,
-        restaurant_name: restaurantName.trim(),
-        phone: phone.trim() || null,
-        email: user.email,
-      });
-      if (profileError) throw profileError;
-
+      // Restaurant row is the source of truth for onboarding. Profile sync is best-effort
+      // so a profiles privilege/trigger failure cannot block creating the menu.
       if (!slug) {
         const { error: insertError } = await supabase.from('food_trucks').insert({
           slug: nextSlug,
@@ -128,6 +121,20 @@ const OnboardingPage = () => {
           .eq('slug', slug)
           .eq('owner_id', user.id);
         if (updateError) throw updateError;
+      }
+
+      const profileFields = {
+        full_name: profile?.full_name || null,
+        restaurant_name: restaurantName.trim(),
+        phone: phone.trim() || null,
+        email: user.email,
+      };
+      const { error: profileError } = await supabase
+        .from('profiles')
+        .update(profileFields)
+        .eq('id', user.id);
+      if (profileError) {
+        console.warn('[kiokitchen:onboarding] profile sync skipped', profileError.message);
       }
 
       const activeSlug = slug || nextSlug;

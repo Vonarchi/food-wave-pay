@@ -449,9 +449,8 @@ CREATE POLICY "Anyone can insert product events"
 -- ---------------------------------------------------------------------------
 
 REVOKE ALL ON public.profiles FROM anon;
-GRANT SELECT, INSERT ON public.profiles TO authenticated;
-REVOKE UPDATE ON public.profiles FROM authenticated;
-GRANT UPDATE (full_name, phone, restaurant_name, email) ON public.profiles TO authenticated;
+GRANT SELECT, INSERT, UPDATE ON public.profiles TO authenticated;
+-- Privileged billing/admin columns are blocked by private.protect_platform_admin().
 
 -- ---------------------------------------------------------------------------
 -- Table grants. service_role is intentionally left untouched.

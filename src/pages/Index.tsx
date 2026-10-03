@@ -37,28 +37,23 @@ const Index = () => {
             .from('food_trucks')
             .select('slug, name, description, logo_url, accent_color, location')
             .eq('is_active', true)
-            .or('slug.eq.demo,is_published.eq.true')
+            .eq('is_published', true)
+            .neq('slug', 'demo')
             .order('name'),
           timeoutPromise,
         ]);
 
         if (!active) return;
 
-        if (error && /is_published/i.test(error.message)) {
-          const demo = await supabase
-            .from('food_trucks')
-            .select('slug, name, description, logo_url, accent_color, location')
-            .eq('is_active', true)
-            .eq('slug', 'demo');
-          if (demo.error) throw demo.error;
-          setTrucks((demo.data as TruckListing[]) || []);
-          return;
-        }
         if (error) {
           throw error;
         }
 
-        setTrucks((data as TruckListing[]) || []);
+        // Sample / Smackin Jacks demo stays on /menu/demo only — not the public directory.
+        const listings = ((data as TruckListing[]) || []).filter(
+          (truck) => !/smackin\s*jacks/i.test(truck.name) && truck.slug !== 'demo'
+        );
+        setTrucks(listings);
       } catch (error) {
         if (!active) return;
 
@@ -94,11 +89,11 @@ const Index = () => {
             <h1 className="kk-display mx-auto max-w-4xl">Turn your paper menu into a digital ordering system</h1>
             <p className="mt-5 text-lg md:text-xl text-muted-foreground max-w-2xl mx-auto">Scan your menu. AI builds it. Customers order. You get paid.</p>
             <div className="mt-8 flex flex-col sm:flex-row gap-3 justify-center">
-              <Button size="xl" onClick={() => navigate('/signup')}>Create my digital menu</Button>
+              <Button size="xl" onClick={() => navigate('/scan')}>Create my digital menu</Button>
               <Button size="xl" variant="outline" onClick={() => document.getElementById('how-it-works')?.scrollIntoView({ behavior: 'smooth' })}>See how it works</Button>
             </div>
             <div className="mt-5 flex flex-wrap justify-center gap-4 text-sm">
-              <button type="button" className="underline text-muted-foreground" onClick={() => navigate('/menu/demo')}>Try KioKitchen</button>
+              <button type="button" className="underline text-muted-foreground" onClick={() => navigate('/menu/demo')}>Try a sample menu</button>
               <button type="button" className="underline text-muted-foreground" onClick={() => navigate('/login')}>Restaurant login</button>
             </div>
           </motion.div>
@@ -114,8 +109,8 @@ const Index = () => {
             {[
               ['QR ordering', '/menu/demo'],
               ['AI cashier', '/menu/demo'],
-              ['Phone AI', '/signup'],
-              ['Drive-thru', '/signup'],
+              ['Phone AI', '/scan'],
+              ['Drive-thru', '/scan'],
             ].map(([label, href]) => (
               <button key={label} type="button" className="kk-card px-3 py-4 text-center font-medium" onClick={() => navigate(href)}>{label}</button>
             ))}
@@ -202,7 +197,7 @@ const Index = () => {
               </Button>
             </div>
           ) : trucks.length === 0 ? (
-            <p className="text-center text-muted-foreground py-8">No restaurants available yet. Try the demo menu above!</p>
+            <p className="text-center text-muted-foreground py-8">No restaurants published yet. Try the sample menu or create yours.</p>
           ) : (
             <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
               {trucks.map((truck, index) => (
@@ -319,12 +314,12 @@ const Index = () => {
             Ready to put your menu online?
           </h2>
           <p className="relative text-accent-foreground/70 mb-8">
-            Create an account, photograph your menu, and publish a QR code.
+            Photograph your menu first. Create an account after you see your digital menu.
           </p>
           <Button
             size="xl"
             className="relative bg-primary text-primary-foreground hover:bg-primary/90"
-            onClick={() => navigate('/signup')}
+            onClick={() => navigate('/scan')}
           >
             Create My Digital Menu
           </Button>

@@ -8,6 +8,7 @@ import { SupabaseEnvBanner } from '@/components/SupabaseEnvBanner';
 import { ConnectivityErrorHint } from '@/components/ConnectivityErrorHint';
 import { track } from '@/lib/analytics';
 import { readCampaign } from '@/lib/commerce';
+import { GoogleAuthButton } from '@/components/auth/GoogleAuthButton';
 import { hasScanDraft, loadScanDraft } from '@/lib/scanDraft';
 import { supabase } from '@/integrations/supabase/client';
 
@@ -164,6 +165,15 @@ const SignupPage = () => {
               )}
             </Button>
           </form>
+
+          <div className="relative my-6">
+            <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-border" /></div>
+            <div className="relative flex justify-center text-xs uppercase"><span className="bg-card px-2 text-muted-foreground">or</span></div>
+          </div>
+          <GoogleAuthButton
+            redirectPath="/onboarding"
+            label={fromScan ? 'Keep menu with Google' : 'Continue with Google'}
+          />
 
           <p className="text-center text-sm text-muted-foreground mt-6">
             Already have an account?{' '}

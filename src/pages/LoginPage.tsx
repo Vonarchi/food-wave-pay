@@ -6,6 +6,8 @@ import { motion } from 'framer-motion';
 import { Loader2 } from 'lucide-react';
 import { SupabaseEnvBanner } from '@/components/SupabaseEnvBanner';
 import { ConnectivityErrorHint } from '@/components/ConnectivityErrorHint';
+import { GoogleAuthButton } from '@/components/auth/GoogleAuthButton';
+import { hasScanDraft } from '@/lib/scanDraft';
 
 const LoginPage = () => {
   const navigate = useNavigate();
@@ -100,14 +102,20 @@ const LoginPage = () => {
             </Button>
           </form>
 
+          <div className="relative my-6">
+            <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-border" /></div>
+            <div className="relative flex justify-center text-xs uppercase"><span className="bg-card px-2 text-muted-foreground">or</span></div>
+          </div>
+          <GoogleAuthButton redirectPath={hasScanDraft() ? '/onboarding' : '/admin/dashboard'} />
+
           <p className="text-center text-sm text-muted-foreground mt-6">
             Don't have an account?{' '}
             <button
               type="button"
-              onClick={() => navigate('/signup')}
+              onClick={() => navigate(hasScanDraft() ? '/signup?from=scan' : '/scan')}
               className="text-primary font-medium hover:underline"
             >
-              Sign up
+              {hasScanDraft() ? 'Create account' : 'Scan your menu'}
             </button>
           </p>
         </div>

@@ -218,7 +218,7 @@ export const useMenuItems = (truckId: string): UseMenuItemsResult => {
 
   const truckName =
     truckInfo?.name ||
-    (usingFallback ? sampleFoodTruck.name : menuNotLive ? truckId : 'Smackin Jacks');
+    (usingFallback ? sampleFoodTruck.name : menuNotLive ? truckId : 'Restaurant');
   const truckDescription = truckInfo?.description || (usingFallback ? sampleFoodTruck.description : 'Order fresh food, made to order');
   const truckLocation = truckInfo?.location || '';
   const truckHours = truckInfo?.hours || '11am - 8pm';

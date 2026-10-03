@@ -29,6 +29,7 @@ interface AuthContextType {
     password: string,
     opts?: { fullName?: string; referralCode?: string; referredBy?: string; partnerId?: string }
   ) => Promise<{ error: Error | null; needsEmailConfirmation: boolean }>;
+  signInWithGoogle: (redirectPath?: string) => Promise<{ error: Error | null }>;
   signOut: () => Promise<void>;
   clearError: () => void;
 }
@@ -230,6 +231,31 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const signInWithGoogle = async (redirectPath = '/admin/dashboard') => {
+    setError(null);
+    try {
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: `${window.location.origin}${redirectPath.startsWith('/') ? redirectPath : `/${redirectPath}`}`,
+          queryParams: {
+            access_type: 'offline',
+            prompt: 'select_account',
+          },
+        },
+      });
+      if (error) {
+        setError(formatAuthFailure(error.message));
+        return { error };
+      }
+      return { error: null };
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Google sign-in failed';
+      setError(formatAuthFailure(msg));
+      return { error: err instanceof Error ? err : new Error(msg) };
+    }
+  };
+
   const signOut = async () => {
     setError(null);
     await supabase.auth.signOut();
@@ -248,6 +274,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         refreshProfile,
         signIn,
         signUp,
+        signInWithGoogle,
         signOut,
         clearError,
       }}
